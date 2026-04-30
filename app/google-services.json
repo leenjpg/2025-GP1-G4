@@ -1,0 +1,28 @@
+{"project_info": {
+    "project_number": "489235107088",
+    "project_id": "hami-7f534",
+    "storage_bucket": "hami-7f534.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:489235107088:android:1df4073f126a60d8a5e995",
+        "android_client_info": {
+          "package_name": "com.example.aimoduel"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_IhuquWqJp8kU93wn2wY_1Z-k3ORMack"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
