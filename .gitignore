@@ -1,0 +1,10 @@
+﻿# Android
+*.iml
+.gradle/
+/local.properties
+.idea/
+build/
+.kotlin/
+*.log
+google-services.json
+.DS_Store

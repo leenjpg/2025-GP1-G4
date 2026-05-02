@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Hami</string>
+    <string name="accessibility_desc">خدمة حامي لحماية الأطفال من التنمر والمخاطر الرقمية</string>
+    <string name="title_activity_login">LoginActivity</string>
+    <string name="title_activity_dashboard">DashboardActivity</string>
+
+</resources>
