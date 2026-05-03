@@ -163,10 +163,20 @@ class DashboardActivity : ComponentActivity() {
                     android.util.Log.d("Dashboard", "Alert: type=$type, read=$isRead, text=$detectedText")
 
                     if (threatTypes.contains(type)) {
+                        val encryptedText = document.getString("text") ?: ""
+                        val vault = HamiSecurityVault(this)
+                        val decryptedText = vault.decryptAES256(encryptedText)
                         val alert = AlertItem(
-                            text = detectedText,
+                          //  text = detectedText, to enc
+                            text = decryptedText, // for decyption
                             riskLabel = type,
                             timestamp = timestamp,
+                            confidence = 0.0f,
+                            childId = "",
+                            parentId = "",
+                            read = false,
+                            actionTaken = null,
+                            context = "keyboard_input",
                             documentId = document.id
                         )
                         allAlerts.add(alert)
@@ -300,6 +310,7 @@ fun AlertsTabContent(alerts: List<AlertItem>, onMarkAsRead: (AlertItem) -> Unit)
 
     Column(modifier = Modifier.fillMaxSize().background(backgroundGradient).padding(16.dp)) {
         Text("التنبيهات الجديدة", style = MaterialTheme.typography.headlineSmall, fontFamily = AlfontDark, color = hamiTeal)
+
 
         Spacer(modifier = Modifier.height(8.dp))
         Text("اسحب التنبيه لليسار لتحديد كمقروء", fontSize = 12.sp, color = Color(0xFF788B94), fontFamily = AlfontDark)

@@ -10,12 +10,17 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Date
 import java.util.Locale
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 class HamiSecurityVault(context: Context) {
 
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
+    private val masterKeyAlias = MasterKey.DEFAULT_MASTER_KEY_ALIAS //forfirebase fucntion
 
     private val sharedPreferences = EncryptedSharedPreferences.create(
         context,
@@ -79,7 +84,13 @@ class HamiSecurityVault(context: Context) {
                     AlertItem(
                         text = obj.optString("text", ""),
                         riskLabel = riskType,
-                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                        confidence = obj.optDouble("confidence", 0.0).toFloat(),
+                        childId = obj.optString("childId", "default"),
+                        parentId = obj.optString("parentId", "unknown"),
+                        read = obj.optBoolean("read", false),
+                        actionTaken = obj.optString("actionTaken", null),
+                        context = obj.optString("context", "keyboard_input")
                     )
                 )
             }
@@ -103,15 +114,17 @@ class HamiSecurityVault(context: Context) {
     }
     //  only for final alerts - leen
     fun saveAlert(alert: AlertItem) {
-       // android.util.Log.d("HAMI_ENC", " SAVING ALERT: ${alert.riskLabel}") for testing-leen
         val messageObject = JSONObject().apply {
             put("text", alert.text)
             put("riskType", alert.riskLabel)
-            put("severity", "Medium") // default for now
+            put("severity", "High")
             put("timestamp", alert.timestamp)
-            syncAlertToFirebase(alert) //firebase sync
-
+            put("childId", alert.childId)
+            put("parentId", alert.parentId)
+            put("confidence", alert.confidence)
         }
+
+        syncAlertToFirebase(alert)
 
         val messagesList = getAllMessages().toMutableList()
         messagesList.add(messageObject)
@@ -119,23 +132,30 @@ class HamiSecurityVault(context: Context) {
         val jsonArray = JSONArray()
         messagesList.forEach { jsonArray.put(it) }
         sharedPreferences.edit().putString("all_messages", jsonArray.toString()).apply()
-        // android.util.Log.d("HAMI_ENC", " ALERT ENCRYPTED AND STORED") for testing
     }
+
     fun syncAlertToFirebase(alert: AlertItem) {
         android.util.Log.d("FIREBASE_SYNC", " ATTEMPTING TO SYNC: ${alert.timestamp}")
 
         try {
-            val db = FirebaseFirestore.getInstance() //syncing
+            val db = FirebaseFirestore.getInstance()
+            val encryptedText = encryptAES256(alert.text)
 
             val alertData = hashMapOf(
-                "text" to alert.text,
-                "riskType" to alert.riskLabel,
-                "severity" to "Medium",
-                "timestamp" to SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(alert.timestamp)),
-                "childId" to "default"
+                "text" to encryptedText,
+                "type" to alert.riskLabel.lowercase(),
+                "severity" to "high",
+                "timestamp" to com.google.firebase.Timestamp(Date(alert.timestamp)),
+                "childId" to alert.childId,
+                "parentId" to alert.parentId,
+                "confidence" to alert.confidence,
+                "context" to alert.context,
+                "read" to alert.read,
+                "actionTaken" to alert.actionTaken,
+                // "detectedText" to encryptedText  // enc -leen
             )
 
-            db.collection("alerts")
+            db.collection("alert")
                 .document(alert.timestamp.toString())
                 .set(alertData)
                 .addOnSuccessListener {
@@ -146,6 +166,43 @@ class HamiSecurityVault(context: Context) {
                 }
         } catch (e: Exception) {
             android.util.Log.e("FIREBASE_SYNC", "Error: ${e.message}")
+        }
+    }
+    private fun encryptAES256(plainText: String): String { // for firebase sync-encytped - diff than salmas enc
+        return try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
+                load(null)
+            }
+            val secretKey = keyStore.getKey(masterKeyAlias, null) as SecretKey
+
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+
+            val iv = cipher.iv
+            val encryptedBytes = cipher.doFinal(plainText.toByteArray())
+            val combined = iv + encryptedBytes
+            android.util.Base64.encodeToString(combined, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            android.util.Log.e("AES", "Encryption failed: ${e.message}")
+            plainText
+        }
+    }
+    fun decryptAES256(encryptedText: String): String {
+        return try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
+                load(null)
+            }
+            val secretKey = keyStore.getKey(masterKeyAlias, null) as SecretKey
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val decoded = android.util.Base64.decode(encryptedText, android.util.Base64.DEFAULT)
+            val iv = decoded.copyOfRange(0, 12)
+            val encrypted = decoded.copyOfRange(12, decoded.size)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, iv))
+            val decryptedBytes = cipher.doFinal(encrypted)
+            String(decryptedBytes)
+        } catch (e: Exception) {
+            android.util.Log.e("AES", "Decryption failed: ${e.message}")
+            encryptedText
         }
     }
 }

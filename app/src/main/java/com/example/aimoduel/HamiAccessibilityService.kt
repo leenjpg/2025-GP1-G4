@@ -93,31 +93,19 @@ class HamiAccessibilityService : AccessibilityService() {
     }
 
     private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float) {
-        try {
-            val alertData = hashMapOf(
-                "childId" to childId,
-                "parentId" to parentId,
-                "timestamp" to Timestamp(Date()),
-                "severity" to severity,  // high, medium, or low
-                "type" to type.lowercase(),  // offensive, sexism, religious discrimination, racism
-                "detectedText" to detectedText,
-                "context" to "keyboard_input",
-                "read" to false,
-                "confidence" to confidence,
-                "actionTaken" to null
-            )
-
-            db.collection("alert")
-                .add(alertData)
-                .addOnSuccessListener { documentReference ->
-                    Log.d("HamiSecurity", "✅ Alert saved to Firestore! ID: ${documentReference.id}")
-                }
-                .addOnFailureListener { e ->
-                    Log.e("HamiSecurity", "❌ Failed to save alert: ${e.message}")
-                }
-        } catch (e: Exception) {
-            Log.e("HamiSecurity", "❌ Error saving to Firestore: ${e.message}")
-        }
+        val vault = HamiSecurityVault(applicationContext)
+        val alert = AlertItem(
+            text = detectedText,
+            riskLabel = type,
+            timestamp = System.currentTimeMillis(),
+            confidence = confidence,
+            childId = childId,
+            parentId = parentId,
+            read = false,
+            actionTaken = null,
+            context = "keyboard_input"
+        )
+        vault.saveAlert(alert)
     }
 
     private fun updateServiceStatus(enabled: Boolean) {
