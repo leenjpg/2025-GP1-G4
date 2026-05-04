@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth

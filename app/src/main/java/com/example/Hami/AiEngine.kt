@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import android.content.Context
 import android.util.Log
@@ -10,7 +10,7 @@ import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
 import org.tensorflow.lite.Interpreter
 
-class HamiAIAnalyzer(private val context: Context) {
+class AiEngine(private val context: Context) {
 
     private val maxSeqLen = 128
     private val executor = Executors.newSingleThreadExecutor()
@@ -163,7 +163,7 @@ class HamiAIAnalyzer(private val context: Context) {
             .trim()
     }
 
-    // FIXED: Returns Pair(paddedTokens, actualLength)
+    // Returns Pair(paddedTokens, actualLength)
     private fun tokenize(text: String): Pair<List<Int>, Int> {
         val tokens = mutableListOf<Int>()
 

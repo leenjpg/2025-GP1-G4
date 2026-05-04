@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AiModuel"
+rootProject.name = "Hami"
 include(":app")

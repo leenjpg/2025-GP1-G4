@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -175,7 +175,6 @@ class DashboardActivity : ComponentActivity() {
                             childId = "",
                             parentId = "",
                             read = false,
-                            actionTaken = null,
                             context = "keyboard_input",
                             documentId = document.id
                         )
@@ -407,7 +406,6 @@ fun AlertCard(alert: AlertItem) {
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark)
             }
         }
     }
@@ -579,38 +577,6 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                 }
             }
         }
-
-        if (weekAlerts.isNotEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RectangleShape,
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("📋 تفاصيل التنبيهات", fontSize = 18.sp, fontFamily = AlfontDark, color = hamiTeal)
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        weekAlerts.forEach { alert ->
-                            val alertColor = threatColors[alert.riskLabel] ?: Color(0xFF64B5F6)
-                            val displayName = threatDisplayNames[alert.riskLabel] ?: alert.riskLabel
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
-                                Box(modifier = Modifier.size(8.dp).background(alertColor, shape = CircleShape))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(displayName, fontSize = 12.sp, fontFamily = AlfontDark, color = alertColor, fontWeight = FontWeight.Bold)
-                                    Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark, color = Color.Black)
-                                    val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale("ar"))
-                                    Text(sdf.format(Date(alert.timestamp)), fontSize = 10.sp, fontFamily = AlfontDark, color = Color.Gray)
-                                }
-                            }
-                            HorizontalDivider()
-                        }
-                    }
-                }
-            }
-        }
-
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),

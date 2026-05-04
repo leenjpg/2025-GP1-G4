@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import android.content.Intent
 import android.os.Bundle
@@ -176,7 +176,7 @@ fun ChildLoginScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("البريد الإلكتروني للوالد", fontFamily = AlfontDark) },
+                label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -313,7 +313,7 @@ fun ChildLoginScreen(
                         }
                         val age = newChildAge.toIntOrNull()
                         if (age == null || age < 1 || age > 18) {
-                            errorMessage = "عمر الطفل يجب أن يكون بين 1 و 18"
+                            errorMessage = "عمر الطفل يجب أن يكون بين ٤ و ١٢"
                             return@Button
                         }
                         val parentUser = authManager.getCurrentUser()

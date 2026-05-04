@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -89,7 +89,6 @@ class HamiSecurityVault(context: Context) {
                         childId = obj.optString("childId", "default"),
                         parentId = obj.optString("parentId", "unknown"),
                         read = obj.optBoolean("read", false),
-                        actionTaken = obj.optString("actionTaken", null),
                         context = obj.optString("context", "keyboard_input")
                     )
                 )
@@ -151,7 +150,6 @@ class HamiSecurityVault(context: Context) {
                 "confidence" to alert.confidence,
                 "context" to alert.context,
                 "read" to alert.read,
-                "actionTaken" to alert.actionTaken,
                 // "detectedText" to encryptedText  // enc -leen
             )
 

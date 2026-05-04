@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.aimoduel"
+    namespace = "com.example.Hami"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.aimoduel"
+        applicationId = "com.example.Hami"
         minSdk = 29
         targetSdk = 34
         versionCode = 1

@@ -1,27 +1,25 @@
-package com.example.aimoduel
+package com.example.Hami
 
 
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo 
+import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.Timestamp
-import java.util.Date
 import android.content.Context
 
 class HamiAccessibilityService : AccessibilityService() {
 
-    private lateinit var aiAnalyzer: HamiAIAnalyzer
+    private lateinit var aiAnalyzer: AiEngine
     private val db = FirebaseFirestore.getInstance()
 
     // IDs from SharedPreferences
     private var childId: String = "unknown"
     private var parentId: String = "unknown"
-   
+
     private var lastAnalyzedText: String = ""
     private val lastAlertTimes = mutableMapOf<String, Long>()
     private val COOLDOWN_TIME_MS = 3 * 60 * 1000L // 3 دقائق
@@ -31,7 +29,7 @@ class HamiAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
 
-        aiAnalyzer = HamiAIAnalyzer(applicationContext)
+        aiAnalyzer = AiEngine(applicationContext)
 
         // Load IDs from SharedPreferences
         val sharedPref = applicationContext.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
@@ -51,9 +49,9 @@ class HamiAccessibilityService : AccessibilityService() {
         var capturedText = ""
         var eventSourceContext = "unknown"
 
-        
+
         when (eventType) {
-           
+
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
                 capturedText = event.text.joinToString(" ").trim()
                 if (capturedText.isEmpty()) {
@@ -62,7 +60,7 @@ class HamiAccessibilityService : AccessibilityService() {
                 eventSourceContext = "keyboard_input"
             }
 
-            
+
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
                 val notificationDetails = event.text
                 if (notificationDetails.isNotEmpty()) {
@@ -71,10 +69,10 @@ class HamiAccessibilityService : AccessibilityService() {
                 eventSourceContext = "notification"
             }
 
-            
+
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-               
+
                 val rootNode = rootInActiveWindow
                 if (rootNode != null) {
                     capturedText = extractTextFromNode(rootNode).trim()
@@ -85,7 +83,7 @@ class HamiAccessibilityService : AccessibilityService() {
 
         if (capturedText.length > 5 && capturedText.contains(" ")) {
 
-           
+
             if (capturedText == lastAnalyzedText) return
             lastAnalyzedText = capturedText
 
@@ -105,7 +103,7 @@ class HamiAccessibilityService : AccessibilityService() {
                         // (التعديل الثاني) فحص التبريد: إذا مرت أقل من 3 دقايق على نفس التهديد، نتجاهل
                         if (currentTime - lastTimeThisLabelAlerted >= COOLDOWN_TIME_MS) {
 
-                           
+
                             lastAlertTimes[label] = currentTime
 
                             val severity = when {
@@ -140,7 +138,7 @@ class HamiAccessibilityService : AccessibilityService() {
         }
     }
 
-    
+
     private fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
         if (node == null) return ""
 
@@ -159,7 +157,7 @@ class HamiAccessibilityService : AccessibilityService() {
         return text
     }
 
-   
+
     private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String) {
         val vault = HamiSecurityVault(applicationContext)
         val alert = AlertItem(
@@ -170,8 +168,7 @@ class HamiAccessibilityService : AccessibilityService() {
             childId = childId,
             parentId = parentId,
             read = false,
-            actionTaken = null,
-            context = sourceContext 
+            context = sourceContext
         )
         vault.saveAlert(alert)
     }

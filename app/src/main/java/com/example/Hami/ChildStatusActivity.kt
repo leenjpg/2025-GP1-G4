@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 import android.content.ComponentName
 import android.content.Intent

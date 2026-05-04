@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 data class ParentUser(
     val uid: String,

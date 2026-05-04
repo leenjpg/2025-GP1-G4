@@ -1,4 +1,4 @@
-package com.example.aimoduel
+package com.example.Hami
 
 data class AlertItem(
     val text: String,
@@ -8,7 +8,6 @@ data class AlertItem(
     val childId: String,
     val parentId: String,
     val read: Boolean = false,
-    val actionTaken: String? = null,
     val context: String = "keyboard_input",
     val documentId: String = ""
 )
