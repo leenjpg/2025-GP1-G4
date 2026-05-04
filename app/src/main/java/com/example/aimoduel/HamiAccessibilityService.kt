@@ -1,7 +1,10 @@
 package com.example.aimoduel
 
+
+
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo 
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
@@ -18,7 +21,10 @@ class HamiAccessibilityService : AccessibilityService() {
     // IDs from SharedPreferences
     private var childId: String = "unknown"
     private var parentId: String = "unknown"
-
+   
+    private var lastAnalyzedText: String = ""
+    private val lastAlertTimes = mutableMapOf<String, Long>()
+    private val COOLDOWN_TIME_MS = 3 * 60 * 1000L // 3 دقائق
     private val analysisHandler = Handler(Looper.getMainLooper())
     private var analysisRunnable: Runnable? = null
 
@@ -42,28 +48,66 @@ class HamiAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         val eventType = event.eventType
+        var capturedText = ""
+        var eventSourceContext = "unknown"
 
-        // Only care about text changes
-        if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
-            var capturedText = event.text.joinToString(" ").trim()
-            if (capturedText.isEmpty()) {
-                capturedText = event.source?.text?.toString() ?: ""
+        
+        when (eventType) {
+           
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                capturedText = event.text.joinToString(" ").trim()
+                if (capturedText.isEmpty()) {
+                    capturedText = event.source?.text?.toString() ?: ""
+                }
+                eventSourceContext = "keyboard_input"
             }
 
-            // Only analyze if text is long enough and contains a space
-            if (capturedText.length > 5 && capturedText.contains(" ")) {
-                analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+            
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                val notificationDetails = event.text
+                if (notificationDetails.isNotEmpty()) {
+                    capturedText = notificationDetails.joinToString(" ").trim()
+                }
+                eventSourceContext = "notification"
+            }
 
-                analysisRunnable = Runnable {
-                    // Process with AI
-                    aiAnalyzer.process(capturedText) { label, confidence ->
+            
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+               
+                val rootNode = rootInActiveWindow
+                if (rootNode != null) {
+                    capturedText = extractTextFromNode(rootNode).trim()
+                    eventSourceContext = "screen_reading"
+                }
+            }
+        }
 
-                        Log.d("HamiSecurity", "📊 Analysis: $label with ${"%.1f".format(confidence * 100)}% confidence")
+        if (capturedText.length > 5 && capturedText.contains(" ")) {
 
-                        // ONLY save if it's dangerous (not Neutral) AND confidence > 60%
-                        if (label != "Neutral" && confidence > 0.6) {
+           
+            if (capturedText == lastAnalyzedText) return
+            lastAnalyzedText = capturedText
 
-                            // Determine severity based on confidence
+            analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+
+            analysisRunnable = Runnable {
+                // Process with AI
+                aiAnalyzer.process(capturedText) { label, confidence ->
+
+                    Log.d("HamiSecurity", "📊 Analysis: $label with ${"%.1f".format(confidence * 100)}% confidence")
+
+                    if (label != "Neutral" && confidence > 0.6) {
+
+                        val currentTime = System.currentTimeMillis()
+                        val lastTimeThisLabelAlerted = lastAlertTimes[label] ?: 0L
+
+                        // (التعديل الثاني) فحص التبريد: إذا مرت أقل من 3 دقايق على نفس التهديد، نتجاهل
+                        if (currentTime - lastTimeThisLabelAlerted >= COOLDOWN_TIME_MS) {
+
+                           
+                            lastAlertTimes[label] = currentTime
+
                             val severity = when {
                                 confidence > 0.85 -> "high"
                                 confidence > 0.7 -> "medium"
@@ -71,28 +115,52 @@ class HamiAccessibilityService : AccessibilityService() {
                             }
 
                             Log.w("HamiSecurity", "⚠️ DANGEROUS CONTENT DETECTED!")
+                            Log.w("HamiSecurity", "   Source: $eventSourceContext")
                             Log.w("HamiSecurity", "   Type: $label")
                             Log.w("HamiSecurity", "   Severity: $severity")
-                            Log.w("HamiSecurity", "   Text: $capturedText")
 
                             // Save to Firestore
                             saveAlertToFirestore(
                                 detectedText = capturedText,
                                 type = label,
                                 severity = severity,
-                                confidence = confidence
+                                confidence = confidence,
+                                sourceContext = eventSourceContext
                             )
                         } else {
-                            Log.d("HamiSecurity", "✅ Content is safe (${label} with ${"%.1f".format(confidence * 100)}%)")
+                            Log.d("HamiSecurity", "⏳ تنبيه مكرر لنوع ($label)، تم إيقاف الإرسال لتجنب الإزعاج.")
                         }
+
+                    } else {
+                        Log.d("HamiSecurity", "✅ Content is safe (${label})")
                     }
                 }
-                analysisHandler.postDelayed(analysisRunnable!!, 1000)
             }
+            analysisHandler.postDelayed(analysisRunnable!!, 1500)
         }
     }
 
-    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float) {
+    
+    private fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
+        if (node == null) return ""
+
+        var text = ""
+
+        if (!node.text.isNullOrEmpty()) {
+            text += node.text.toString() + " "
+        } else if (!node.contentDescription.isNullOrEmpty()) {
+            text += node.contentDescription.toString() + " "
+        }
+
+        for (i in 0 until node.childCount) {
+            text += extractTextFromNode(node.getChild(i))
+        }
+
+        return text
+    }
+
+   
+    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String) {
         val vault = HamiSecurityVault(applicationContext)
         val alert = AlertItem(
             text = detectedText,
@@ -103,7 +171,7 @@ class HamiAccessibilityService : AccessibilityService() {
             parentId = parentId,
             read = false,
             actionTaken = null,
-            context = "keyboard_input"
+            context = sourceContext 
         )
         vault.saveAlert(alert)
     }
