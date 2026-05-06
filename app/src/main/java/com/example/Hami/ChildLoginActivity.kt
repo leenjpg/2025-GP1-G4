@@ -22,17 +22,35 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Timestamp
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
+
+fun getArabicErrorMessage(error: String?): String {
+    if (error == null) return "حدث خطأ غير معروف"
+    val lowerError = error.lowercase()
+    return when {
+
+        lowerError.contains("password") || lowerError.contains("credential") -> "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+        lowerError.contains("email") || lowerError.contains("user not found") -> "البريد الإلكتروني غير مسجل أو غير صحيح"
+        lowerError.contains("network") -> "تأكد من اتصالك بالإنترنت"
+        lowerError.contains("too many requests") -> "محاولات كثيرة خاطئة، يرجى المحاولة لاحقاً"
+        lowerError.contains("format") -> "صيغة البريد الإلكتروني غير صحيحة"
+        else -> "فشل تسجيل الدخول: يرجى المحاولة مرة أخرى"
+    }
+}
 
 class ChildLoginActivity : ComponentActivity() {
     private val authManager = AuthManager()
@@ -51,17 +69,20 @@ class ChildLoginActivity : ComponentActivity() {
         }
 
         setContent {
-            ChildLoginScreen(
-                onLoginSuccess = { parentUser, selectedChild ->
-                    saveChildLogin(parentUser, selectedChild)
-                    navigateToChildStatus()
-                },
-                onCreateNewChild = { parentUser, childName, childAge ->
-                    createNewChild(parentUser, childName, childAge)
-                    navigateToChildStatus()
-                },
-                authManager = authManager
-            )
+            // (RTL)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                ChildLoginScreen(
+                    onLoginSuccess = { parentUser, selectedChild ->
+                        saveChildLogin(parentUser, selectedChild)
+                        navigateToChildStatus()
+                    },
+                    onCreateNewChild = { parentUser, childName, childAge ->
+                        createNewChild(parentUser, childName, childAge)
+                        navigateToChildStatus()
+                    },
+                    authManager = authManager
+                )
+            }
         }
     }
 
@@ -176,12 +197,17 @@ fun ChildLoginScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
+                label = { Text("البريد الإلكتروني للوالد", fontFamily = AlfontDark) },
                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isLoading,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+
+                textStyle = LocalTextStyle.current.copy(
+                    textDirection = TextDirection.Ltr,
+                    textAlign = TextAlign.Left
+                )
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -195,7 +221,12 @@ fun ChildLoginScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 enabled = !isLoading,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+
+                textStyle = LocalTextStyle.current.copy(
+                    textDirection = TextDirection.Ltr,
+                    textAlign = TextAlign.Left
+                )
             )
 
             errorMessage?.let {
@@ -240,7 +271,7 @@ fun ChildLoginScreen(
                                 isLoading = false
                             }
                         } else {
-                            errorMessage = error ?: "فشل تسجيل الدخول"
+                            errorMessage = getArabicErrorMessage(error)
                             isLoading = false
                         }
                     }
@@ -268,7 +299,9 @@ fun ChildLoginScreen(
                 label = { Text("اسم الطفل", fontFamily = AlfontDark) },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                
+                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -279,7 +312,8 @@ fun ChildLoginScreen(
                 label = { Text("عمر الطفل", fontFamily = AlfontDark) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
             )
 
             errorMessage?.let {
@@ -313,7 +347,7 @@ fun ChildLoginScreen(
                         }
                         val age = newChildAge.toIntOrNull()
                         if (age == null || age < 1 || age > 18) {
-                            errorMessage = "عمر الطفل يجب أن يكون بين ٤ و ١٢"
+                            errorMessage = "عمر الطفل يجب أن يكون بين 1 و 18"
                             return@Button
                         }
                         val parentUser = authManager.getCurrentUser()
