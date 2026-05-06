@@ -1,4 +1,4 @@
-package com.example.Hami
+package com.example.aimoduel
 
 import android.content.Intent
 import android.os.Bundle
@@ -14,11 +14,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
@@ -52,21 +57,24 @@ class LoginActivity : ComponentActivity() {
                 .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
             val isParentProfileComplete = sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)
 
-            if (authManager.isParentAuthenticated() && isParentProfileComplete) {
-                navigateToDashboard()
-            } else {
-                MainLoginScreen(
-                    onLoginSuccess = { parentUser ->
-                        // For existing users, just navigate
-                        markProfileComplete(parentUser.uid, parentUser.email, "")
-                        navigateToDashboard()
-                    },
-                    onSignUpSuccess = { parentUser, fullName ->
-                        // Save to Firestore FIRST, then navigate
-                        saveParentToFirestore(parentUser, fullName)
-                    },
-                    authManager = authManager
-                )
+            //  (RTL)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                if (authManager.isParentAuthenticated() && isParentProfileComplete) {
+                    navigateToDashboard()
+                } else {
+                    MainLoginScreen(
+                        onLoginSuccess = { parentUser ->
+                            // For existing users, just navigate
+                            markProfileComplete(parentUser.uid, parentUser.email, "")
+                            navigateToDashboard()
+                        },
+                        onSignUpSuccess = { parentUser, fullName ->
+                            // Save to Firestore FIRST, then navigate
+                            saveParentToFirestore(parentUser, fullName)
+                        },
+                        authManager = authManager
+                    )
+                }
             }
         }
     }
@@ -217,7 +225,12 @@ fun LoginScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true
+            singleLine = true,
+            
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -231,7 +244,12 @@ fun LoginScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true
+            singleLine = true,
+          
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         Row(
@@ -264,7 +282,8 @@ fun LoginScreenContent(
                                 isLoading = false
                             }
                         } else {
-                            errorMessage = error ?: "فشل تسجيل الدخول"
+                             
+                            errorMessage = getArabicErrorMessage(error)
                             isLoading = false
                         }
                     }
@@ -328,7 +347,9 @@ fun SignUpScreenContent(
             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
-            singleLine = true
+            singleLine = true,
+        
+            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -341,7 +362,12 @@ fun SignUpScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true
+            singleLine = true,
+            
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -355,7 +381,12 @@ fun SignUpScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true
+            singleLine = true,
+            
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -370,7 +401,12 @@ fun SignUpScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
-            isError = password != confirmPassword && confirmPassword.isNotEmpty()
+            isError = password != confirmPassword && confirmPassword.isNotEmpty(),
+           
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         Text(
@@ -410,7 +446,8 @@ fun SignUpScreenContent(
                                         isLoading = false
                                     }
                                 } else {
-                                    errorMessage = error ?: "فشل إنشاء الحساب"
+                                   
+                                    errorMessage = getArabicErrorMessage(error)
                                     isLoading = false
                                 }
                             }
@@ -470,7 +507,12 @@ fun ForgotPasswordScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            singleLine = true
+            singleLine = true,
+           
+            textStyle = LocalTextStyle.current.copy(
+                textDirection = TextDirection.Ltr,
+                textAlign = TextAlign.Left
+            )
         )
 
         successMessage?.let {
@@ -491,10 +533,11 @@ fun ForgotPasswordScreenContent(
                     successMessage = null
                     authManager.resetPassword(email) { success, message ->
                         if (success) {
-                            successMessage = message ?: "تم إرسال الرابط"
+                            successMessage = "تم إرسال الرابط إلى بريدك الإلكتروني بنجاح"
                             email = ""
                         } else {
-                            errorMessage = message ?: "فشل إرسال الرابط"
+                        
+                            errorMessage = getArabicErrorMessage(message)
                         }
                         isLoading = false
                     }
