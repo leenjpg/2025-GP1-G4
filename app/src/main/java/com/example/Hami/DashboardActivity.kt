@@ -24,9 +24,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -79,48 +81,51 @@ class DashboardActivity : ComponentActivity() {
         android.util.Log.d("Dashboard", "Current user: ${currentUser?.uid}")
 
         setContent {
-            val unreadAlertsList = remember { mutableStateListOf<AlertItem>() }
-            val allAlertsList = remember { mutableStateListOf<AlertItem>() }
-            var selectedTab by remember { mutableStateOf<NavItem>(NavItem.Alerts) }
-            var isLoading by remember { mutableStateOf(true) }
-            var errorMessage by remember { mutableStateOf<String?>(null) }
+            //  (RTL)
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                val unreadAlertsList = remember { mutableStateListOf<AlertItem>() }
+                val allAlertsList = remember { mutableStateListOf<AlertItem>() }
+                var selectedTab by remember { mutableStateOf<NavItem>(NavItem.Alerts) }
+                var isLoading by remember { mutableStateOf(true) }
+                var errorMessage by remember { mutableStateOf<String?>(null) }
 
-            // Load alerts when activity starts
-            LaunchedEffect(Unit) {
-                loadAlertsFromFirestore(unreadAlertsList, allAlertsList) { error ->
-                    isLoading = false
-                    errorMessage = error
-                }
-            }
-
-            DashboardScreen(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it },
-                unreadAlerts = unreadAlertsList,
-                allAlerts = allAlertsList,
-                isLoading = isLoading,
-                errorMessage = errorMessage,
-                onMarkAsRead = { alert ->
-                    unreadAlertsList.removeAll { it.documentId == alert.documentId }
-                    val db = FirebaseFirestore.getInstance()
-                    db.collection("alert").document(alert.documentId)
-                        .update("read", true)
-                        .addOnFailureListener {
-                            unreadAlertsList.add(alert)
-                        }
-                },
-                onRefresh = {
-                    isLoading = true
+                // Load alerts when activity starts
+                LaunchedEffect(Unit) {
                     loadAlertsFromFirestore(unreadAlertsList, allAlertsList) { error ->
                         isLoading = false
                         errorMessage = error
                     }
-                },
-                onLogout = {
-                    authManager.logoutParent()
-                    finish()
                 }
-            )
+
+                DashboardScreen(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    unreadAlerts = unreadAlertsList,
+                    allAlerts = allAlertsList,
+                    isLoading = isLoading,
+                    errorMessage = errorMessage,
+                    onMarkAsRead = { alert ->
+                        unreadAlertsList.removeAll { it.documentId == alert.documentId }
+                        val db = FirebaseFirestore.getInstance()
+                        db.collection("alert").document(alert.documentId)
+                            .update("read", true)
+                            .addOnFailureListener {
+                                unreadAlertsList.add(alert)
+                            }
+                    },
+                    onRefresh = {
+                        isLoading = true
+                        loadAlertsFromFirestore(unreadAlertsList, allAlertsList) { error ->
+                            isLoading = false
+                            errorMessage = error
+                        }
+                    },
+                    onLogout = {
+                        authManager.logoutParent()
+                        finish()
+                    }
+                )
+            }
         }
     }
 
@@ -144,6 +149,7 @@ class DashboardActivity : ComponentActivity() {
         val parentId = currentUser.uid
         android.util.Log.d("Dashboard", "Loading alerts for parentId: $parentId")
 
+        
         db.collection("alert")
             .whereEqualTo("parentId", parentId)
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -157,25 +163,23 @@ class DashboardActivity : ComponentActivity() {
                 for (document in snapshot.documents) {
                     val type = document.getString("type")?.lowercase() ?: ""
                     val isRead = document.getBoolean("read") ?: false
-                    val detectedText = document.getString("detectedText") ?: ""
                     val timestamp = document.getTimestamp("timestamp")?.toDate()?.time ?: System.currentTimeMillis()
-
-                    android.util.Log.d("Dashboard", "Alert: type=$type, read=$isRead, text=$detectedText")
 
                     if (threatTypes.contains(type)) {
                         val encryptedText = document.getString("text") ?: ""
                         val vault = HamiSecurityVault(this)
                         val decryptedText = vault.decryptAES256(encryptedText)
+
                         val alert = AlertItem(
-                          //  text = detectedText, to enc
-                            text = decryptedText, // for decyption
+                            text = decryptedText, // فك التشفير
                             riskLabel = type,
                             timestamp = timestamp,
                             confidence = 0.0f,
                             childId = "",
                             parentId = "",
-                            read = false,
-                            context = "keyboard_input",
+                            read = isRead,
+                            actionTaken = null,
+                            context = document.getString("context") ?: "unknown",
                             documentId = document.id
                         )
                         allAlerts.add(alert)
@@ -312,7 +316,7 @@ fun AlertsTabContent(alerts: List<AlertItem>, onMarkAsRead: (AlertItem) -> Unit)
 
 
         Spacer(modifier = Modifier.height(8.dp))
-        Text("اسحب التنبيه لليسار لتحديد كمقروء", fontSize = 12.sp, color = Color(0xFF788B94), fontFamily = AlfontDark)
+        Text("اسحب التنبيه لتحديد كمقروء", fontSize = 12.sp, color = Color(0xFF788B94), fontFamily = AlfontDark)
 
         if (alerts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -351,10 +355,10 @@ fun SwipeToMarkReadCard(alert: AlertItem, onMarkAsRead: () -> Unit) {
                 Color(0xFF4CAF50) else Color.Transparent
             Box(
                 modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd
+                contentAlignment = Alignment.CenterEnd // لأن الواجهة RTL، هذي بتصير باليمين
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("تمت المراجعة", color = Color.White, fontSize = 14.sp)
+                    Text("تمت المراجعة", color = Color.White, fontSize = 14.sp, fontFamily = AlfontDark)
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(Icons.Filled.Done, contentDescription = "Mark as Read", tint = Color.White)
                 }
@@ -406,6 +410,7 @@ fun AlertCard(alert: AlertItem) {
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+                // Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark)
             }
         }
     }
@@ -546,7 +551,7 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                             Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
                                 Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(if (maxDayCount > 0) count.toFloat() / maxDayCount else 0f).background(hamiTeal))
                             }
-                            Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp))
+                            Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp), fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -570,13 +575,14 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                                 Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
                                     Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(count.toFloat() / maxWeeklyCount).background(hamiTeal))
                                 }
-                                Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp))
+                                Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp), fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             }
         }
+
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
