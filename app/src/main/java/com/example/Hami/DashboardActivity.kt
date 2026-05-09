@@ -178,7 +178,6 @@ class DashboardActivity : ComponentActivity() {
                             childId = "",
                             parentId = "",
                             read = isRead,
-                            actionTaken = null,
                             context = document.getString("context") ?: "unknown",
                             documentId = document.id
                         )
