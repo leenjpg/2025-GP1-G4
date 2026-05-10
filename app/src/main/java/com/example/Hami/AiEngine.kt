@@ -10,6 +10,11 @@ import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
 import org.tensorflow.lite.Interpreter
 
+/*
+   Text classification engine for detecting offensive content and hate speech in Arabic text.
+   Uses a TensorFlow Lite model with BERT-based tokenization to classify text into 5 categories:
+   Neutral, Offensive, Sexism, Religious Discrimination, and Racism.
+ */
 class AiEngine(private val context: Context) {
 
     private val maxSeqLen = 128
@@ -27,6 +32,13 @@ class AiEngine(private val context: Context) {
         loadVocabulary()
     }
 
+
+    /*
+      Loads the WordPiece vocabulary from tokenizer.json in app assets.
+      Populates both forward (word->id) and reverse (id->word) mappings.
+      Special tokens: [CLS] (classification start), [SEP] (segment separator),
+      [UNK] (unknown word), [PAD] (padding token).
+     */
     private fun loadVocabulary() {
         try {
             val jsonString = context.assets.open("tokenizer.json").bufferedReader().use { it.readText() }
@@ -49,7 +61,12 @@ class AiEngine(private val context: Context) {
             Log.e("HamiTrace", "❌ [VOCAB ERROR]: ${e.message}")
         }
     }
-
+    /*
+      Loads the TensorFlow Lite model from assets using memory-mapped file I/O.
+      Model expects 3 input tensors: attention mask (Long[1][128]),
+      input IDs (Long[1][128]), and token type IDs (Long[1][128]).
+      Output is Float[1][5] logits for the 5 classification categories.
+     */
     private fun loadModel() {
         try {
             val assetFileDescriptor = context.assets.openFd("model.tflite")
@@ -75,7 +92,14 @@ class AiEngine(private val context: Context) {
             Log.e("HamiTrace", "❌ [LOAD ERROR]: ${e.message}")
         }
     }
+    /*
+      Processes input text and returns classification result via callback.
+      Workflow: normalize -> tokenize -> create attention mask -> run inference -> softmax -> callback
 
+      @param text Input Arabic text to classify (can be empty, will be ignored)
+      @param callback Returns (predictedLabel, confidenceScore) on main thread.
+                      Returns ("Neutral", 0f) on error.
+     */
     fun process(text: String, callback: (String, Float) -> Unit) {
         Log.d("HamiTrace", "=".repeat(50))
         Log.d("HamiTrace", "🔴 PROCESS CALLED with text: '$text'")
@@ -100,7 +124,7 @@ class AiEngine(private val context: Context) {
                 val tokenWords = paddedTokens.take(actualLength).mapNotNull { reverseVocab[it] }
                 Log.d("HamiTrace", "🔤 Actual tokens: $tokenWords")
 
-                // Step 4: Create mask based on ACTUAL length (NOT padded length!)
+                // Step 4: Create mask based on ACTUAL length
                 val maskArray = LongArray(maxSeqLen) { if (it < actualLength) 1L else 0L }
                 val maskBuffer = java.nio.LongBuffer.wrap(maskArray)
                 Log.d("HamiTrace", "🎭 Mask (first 20): ${maskArray.take(20)}")
@@ -134,7 +158,7 @@ class AiEngine(private val context: Context) {
                     Log.d("HamiTrace", "   ${labels[i]}: ${"%.2f".format(probabilities[i] * 100)}%")
                 }
 
-                // Step 10: Find highest probability
+                // Step 10: Find the highest probability
                 val maxIndex = probabilities.indices.maxByOrNull { probabilities[it] } ?: 0
                 val confidence = probabilities[maxIndex]
                 val predictedLabel = labels[maxIndex]
@@ -154,6 +178,13 @@ class AiEngine(private val context: Context) {
         }
     }
 
+    /*
+      Normalizes Arabic text by removing diacritics, URLs, mentions, hashtags,
+      non-Arabic characters, and extra whitespace.
+
+      @param text Raw input text
+      @return Cleaned text suitable for tokenization
+     */
     private fun normalize(text: String): String {
         return text
             .replace("[\\u064B-\\u0652]".toRegex(), "")
@@ -163,7 +194,14 @@ class AiEngine(private val context: Context) {
             .trim()
     }
 
-    // Returns Pair(paddedTokens, actualLength)
+    /*
+      Tokenizes text using WordPiece algorithm with [CLS] and [SEP] markers.
+
+      @param text Normalized input text
+      @return Pair containing:
+              - List of token IDs padded to maxSeqLen (0 = [PAD])
+              - Actual number of tokens before padding (used for attention mask)
+     */
     private fun tokenize(text: String): Pair<List<Int>, Int> {
         val tokens = mutableListOf<Int>()
 
@@ -198,7 +236,7 @@ class AiEngine(private val context: Context) {
         // Add [SEP]
         tokens.add(vocabDictionary["[SEP]"] ?: 3)
 
-        // Save actual length BEFORE padding!
+        // Save actual length BEFORE padding
         val actualLength = tokens.size
         Log.d("HamiTrace", "   Actual tokens before padding: $actualLength")
         Log.d("HamiTrace", "   Raw tokens: $tokens")
@@ -211,7 +249,13 @@ class AiEngine(private val context: Context) {
         // Return padded tokens AND actual length
         return Pair(tokens.take(maxSeqLen), actualLength)
     }
+    /*
+      Applies softmax (Activation function) to convert logits to probability distribution.
+      Uses max subtraction for numerical stability.
 
+      @param logits Raw model outputs (size 5)
+      @return Probability distribution where sum = 1.0
+     */
     private fun softmax(logits: FloatArray): FloatArray {
         val max = logits.maxOrNull() ?: 0f
         val exps = logits.map { kotlin.math.exp((it - max).toDouble()).toFloat() }
