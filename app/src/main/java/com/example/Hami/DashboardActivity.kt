@@ -372,6 +372,14 @@ fun SwipeToMarkReadCard(alert: AlertItem, onMarkAsRead: () -> Unit) {
 
 @Composable
 fun AlertCard(alert: AlertItem) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sharedPref = remember {
+        context.getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+    }
+    val showAlertText = remember {
+        sharedPref.getBoolean("SHOW_ALERT_TEXT", false)
+    }
+
     val sdf = remember { SimpleDateFormat("yyyy/MM/dd HH:mm", Locale("ar")) }
     val riskColor = threatColors[alert.riskLabel] ?: Color(0xFF64B5F6)
     val displayName = threatDisplayNames[alert.riskLabel] ?: alert.riskLabel
@@ -409,7 +417,23 @@ fun AlertCard(alert: AlertItem) {
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                // Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark)
+
+                if (showAlertText) {
+                    // Show the full text
+                    Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark)
+                } else {
+                    // Hide the text, show a placeholder
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("🔒", fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "النص مخفي - فعّل الإظهار من الإعدادات",
+                            fontSize = 13.sp,
+                            fontFamily = AlfontDark,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
         }
     }
@@ -644,10 +668,97 @@ data class WeekData(val weekNumber: Int, val year: Int, val displayName: String,
 
 @Composable
 fun SettingsTab(onLogout: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sharedPref = remember {
+        context.getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+    }
+
+    // Default is FALSE (don't show text)
+    var showAlertText by remember {
+        mutableStateOf(sharedPref.getBoolean("SHOW_ALERT_TEXT", false))
+    }
+
     val backgroundGradient = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF)))
-    Box(modifier = Modifier.fillMaxSize().background(backgroundGradient), contentAlignment = Alignment.Center) {
-        Button(onClick = onLogout, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), shape = RectangleShape) {
-            Text("تسجيل الخروج", fontFamily = AlfontDark, color = Color.White, fontSize = 18.sp)
+    val hamiTeal = Color(0xFF52879C)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundGradient)
+            .padding(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                "الإعدادات",
+                fontSize = 28.sp,
+                fontFamily = AlfontDark,
+                color = hamiTeal
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Privacy Settings Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RectangleShape,
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "إظهار نص التنبيه",
+                            fontSize = 16.sp,
+                            fontFamily = AlfontDark,
+                            color = hamiTeal,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "عند التفعيل، سيظهر النص الكامل للرسالة في التنبيهات",
+                            fontSize = 12.sp,
+                            fontFamily = AlfontDark,
+                            color = Color.Gray
+                        )
+                    }
+                    Switch(
+                        checked = showAlertText,
+                        onCheckedChange = { newValue ->
+                            showAlertText = newValue
+                            sharedPref.edit().putBoolean("SHOW_ALERT_TEXT", newValue).apply()
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = hamiTeal
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Logout button
+            Button(
+                onClick = onLogout,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                shape = RectangleShape,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) {
+                Text("تسجيل الخروج", fontFamily = AlfontDark, color = Color.White, fontSize = 18.sp)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

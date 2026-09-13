@@ -36,6 +36,7 @@ import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.runBlocking
+import android.content.Context
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
@@ -66,6 +67,7 @@ class LoginActivity : ComponentActivity() {
                         onLoginSuccess = { parentUser ->
                             // For existing users, just navigate
                             markProfileComplete(parentUser.uid, parentUser.email, "")
+                            saveFcmToken()
                             navigateToDashboard()
                         },
                         onSignUpSuccess = { parentUser, fullName ->
@@ -126,6 +128,29 @@ class LoginActivity : ComponentActivity() {
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)
         finish()
+    }
+    // Add this function anywhere inside LoginActivity class
+    private fun saveFcmToken() {
+        val sharedPref = getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+        val parentId = sharedPref.getString("PARENT_ID", null) ?: return
+
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result
+                    if (token != null) {
+                        val db = FirebaseFirestore.getInstance()
+                        db.collection("parent").document(parentId)
+                            .update("fcmToken", token)
+                            .addOnSuccessListener {
+                                android.util.Log.d("LoginActivity", "✅ FCM Token saved")
+                            }
+                            .addOnFailureListener { e ->
+                                android.util.Log.e("LoginActivity", "❌ Failed to save token: ${e.message}")
+                            }
+                    }
+                }
+            }
     }
 }
 

@@ -80,6 +80,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-firestore:25.0.0") //alert
+    implementation("com.google.firebase:firebase-messaging:23.4.0")
 
     // --- TensorFlow Lite (LiteRT) ---
     implementation("com.google.ai.edge.litert:litert-support:1.4.2")
