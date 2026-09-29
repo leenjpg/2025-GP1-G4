@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" /> <!-- NEW: Add this line -->
+    <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
         android:name=".MyApp"
@@ -47,19 +48,24 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- NEW: Add this entire service block -->
+        <!-- Your FCM service -->
         <service
             android:name=".FcmService"
             android:exported="false">
             <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+                <action android:name="com.google.firebase.MESSAGING_EVENT"/>
             </intent-filter>
         </service>
 
-        <!-- NEW: Add this metadata -->
+        <!-- Default notification channel (used when app is in background) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="hami_alerts" />
+            android:value="hami_alerts"/>
+
+        <!-- Default icon (optional but recommended) -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_foreground"/>
 
     </application>
 </manifest>

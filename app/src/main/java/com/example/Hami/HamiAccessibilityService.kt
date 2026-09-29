@@ -95,7 +95,6 @@ class HamiAccessibilityService : AccessibilityService() {
         val currentTime = System.currentTimeMillis()
         val newWordsList = mutableListOf<String>()
 
-
         for (word in allArabicWords) {
             val savedTime = alertedWordsPool[word]
             if (savedTime != null) {
@@ -104,24 +103,25 @@ class HamiAccessibilityService : AccessibilityService() {
                     newWordsList.add(word)
                 }
             } else {
-                newWordsList.add(word) // كلمة جديدة كلياً
+                newWordsList.add(word)
             }
         }
 
-
-        val textToAnalyze = newWordsList.joinToString(" ")
-
-
-        if (textToAnalyze.isBlank()) {
+        if (newWordsList.isEmpty()) {
             Log.d("HamiSecurity", "⏳ تم الصد: النص موجود مسبقاً في الذاكرة كإشعار أو شاشة.")
             return
         }
 
+        // 1. Send the full rawText to the AI model so it properly detects toxicity
+        aiAnalyzer.process(rawText) { label, confidence ->
 
-        aiAnalyzer.process(textToAnalyze) { label, confidence ->
-            if (label != "Neutral" && confidence > 0.6) {
+            // 2. Trigger ONLY if the text is NOT Normal/Neutral and confidence is high
+            if (label != "Neutral" && label != "Normal" && confidence > 0.6) {
 
-                // 4. الحجز المسبق: بما أن الكلمات الجديدة هذي سببت تنبيه، نحفظها في الذاكرة لمدة 24 ساعة
+                // 3. Keep only the specific words that triggered the review
+                val triggeredWordsOnly = newWordsList.joinToString(" ")
+
+                // 4. Update the 24-hour pool memory
                 for (word in newWordsList) {
                     alertedWordsPool[word] = System.currentTimeMillis()
                 }
@@ -132,10 +132,10 @@ class HamiAccessibilityService : AccessibilityService() {
                     else -> "low"
                 }
 
-                Log.w("HamiSecurity", "⚠️ ALERT: $label detected via $sourceContext")
+                Log.w("HamiSecurity", "⚠️ ALERT: $label detected ($triggeredWordsOnly)")
 
-
-                saveAlertToFirestore(rawText, label, severity, confidence, sourceContext)
+                // 5. Save ONLY the detected word(s) to Firestore
+                saveAlertToFirestore(triggeredWordsOnly, label, severity, confidence, sourceContext)
             }
         }
     }

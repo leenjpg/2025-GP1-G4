@@ -32,10 +32,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.runBlocking
 import android.content.Context
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
@@ -45,33 +44,27 @@ class LoginActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Test Firestore connection
-        val db = FirebaseFirestore.getInstance()
-        db.collection("test").document("test").set(hashMapOf("test" to "value"))
-            .addOnSuccessListener { android.util.Log.d("Firestore", "✅ Working") }
-            .addOnFailureListener { android.util.Log.e("Firestore", "❌ Failed: ${it.message}") }
-
         authManager = AuthManager()
 
         setContent {
             val sharedPref = androidx.compose.ui.platform.LocalContext.current
-                .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+                .getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
             val isParentProfileComplete = sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)
 
-            //  (RTL)
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 if (authManager.isParentAuthenticated() && isParentProfileComplete) {
                     navigateToDashboard()
                 } else {
                     MainLoginScreen(
                         onLoginSuccess = { parentUser ->
-                            // For existing users, just navigate
+                            // 1) Save PARENT_ID first (so saveFcmToken can find it)
                             markProfileComplete(parentUser.uid, parentUser.email, "")
-                            saveFcmToken()
+                            // 2) Now fetch and save the token
+                            saveFcmToken(parentUser.uid)
                             navigateToDashboard()
                         },
                         onSignUpSuccess = { parentUser, fullName ->
-                            // Save to Firestore FIRST, then navigate
+                            // Save to Firestore + save PARENT_ID + save token
                             saveParentToFirestore(parentUser, fullName)
                         },
                         authManager = authManager
@@ -91,16 +84,16 @@ class LoginActivity : ComponentActivity() {
         )
 
         db.collection("parent").document(parentUser.uid)
-            .set(parentData)
+            .set(parentData, SetOptions.merge())   // merge so we don't wipe fcmToken
             .addOnSuccessListener {
                 android.util.Log.d("LoginActivity", "✅ Parent saved to Firestore: ${parentUser.uid}")
-                // Mark profile complete and navigate
+                // Save PARENT_ID to prefs FIRST, then fetch token
                 markProfileComplete(parentUser.uid, parentUser.email, fullName)
+                saveFcmToken(parentUser.uid)   // ⬅️ THE MISSING CALL
                 navigateToDashboard()
             }
             .addOnFailureListener { e ->
                 android.util.Log.e("LoginActivity", "❌ Failed to save to Firestore: ${e.message}")
-                // Still navigate even if Firestore fails? No, show error
                 android.widget.Toast.makeText(
                     this@LoginActivity,
                     "فشل حفظ البيانات: ${e.message}",
@@ -110,7 +103,7 @@ class LoginActivity : ComponentActivity() {
     }
 
     private fun markProfileComplete(uid: String, email: String, name: String) {
-        val sharedPref = getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+        val sharedPref = getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().apply {
             putBoolean("PARENT_PROFILE_COMPLETE", true)
             if (name.isNotEmpty()) putString("PARENT_NAME", name)
@@ -121,7 +114,7 @@ class LoginActivity : ComponentActivity() {
     }
 
     private fun navigateToDashboard() {
-        val sharedPref = getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+        val sharedPref = getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().putString("USER_ROLE", "PARENT").apply()
 
         val intent = Intent(this, DashboardActivity::class.java)
@@ -129,27 +122,40 @@ class LoginActivity : ComponentActivity() {
         startActivity(intent)
         finish()
     }
-    // Add this function anywhere inside LoginActivity class
-    private fun saveFcmToken() {
-        val sharedPref = getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
-        val parentId = sharedPref.getString("PARENT_ID", null) ?: return
+
+    /**
+     * Fetches the FCM token from Firebase Messaging and saves it to the
+     * parent document in Firestore using merge() so it never silently fails.
+     *
+     * @param parentId the authenticated parent UID (must be provided!)
+     */
+    private fun saveFcmToken(parentId: String) {
+        android.util.Log.d("LoginActivity", "🔍 Fetching FCM token for parent: $parentId")
 
         com.google.firebase.messaging.FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val token = task.result
-                    if (token != null) {
-                        val db = FirebaseFirestore.getInstance()
-                        db.collection("parent").document(parentId)
-                            .update("fcmToken", token)
-                            .addOnSuccessListener {
-                                android.util.Log.d("LoginActivity", "✅ FCM Token saved")
-                            }
-                            .addOnFailureListener { e ->
-                                android.util.Log.e("LoginActivity", "❌ Failed to save token: ${e.message}")
-                            }
-                    }
+                if (!task.isSuccessful) {
+                    android.util.Log.e("LoginActivity", "❌ Failed to get FCM token: ${task.exception?.message}")
+                    return@addOnCompleteListener
                 }
+
+                val token = task.result
+                if (token.isNullOrEmpty()) {
+                    android.util.Log.e("LoginActivity", "❌ FCM token is null or empty")
+                    return@addOnCompleteListener
+                }
+
+                android.util.Log.d("LoginActivity", "🔑 Got FCM token: $token")
+
+                val db = FirebaseFirestore.getInstance()
+                db.collection("parent").document(parentId)
+                    .set(mapOf("fcmToken" to token), SetOptions.merge())
+                    .addOnSuccessListener {
+                        android.util.Log.d("LoginActivity", "✅ FCM Token saved for $parentId")
+                    }
+                    .addOnFailureListener { e ->
+                        android.util.Log.e("LoginActivity", "❌ Failed to save token: ${e.message}")
+                    }
             }
     }
 }
@@ -251,7 +257,6 @@ fun LoginScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true,
-            
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -270,7 +275,6 @@ fun LoginScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
-          
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -307,7 +311,6 @@ fun LoginScreenContent(
                                 isLoading = false
                             }
                         } else {
-                             
                             errorMessage = getArabicErrorMessage(error)
                             isLoading = false
                         }
@@ -373,7 +376,6 @@ fun SignUpScreenContent(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             singleLine = true,
-        
             textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
         )
 
@@ -388,7 +390,6 @@ fun SignUpScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true,
-            
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -407,7 +408,6 @@ fun SignUpScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
-            
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -427,7 +427,6 @@ fun SignUpScreenContent(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
             isError = password != confirmPassword && confirmPassword.isNotEmpty(),
-           
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -464,14 +463,12 @@ fun SignUpScreenContent(
                                 if (success) {
                                     val currentUser = authManager.getCurrentUser()
                                     if (currentUser != null) {
-                                        // Pass to parent to save to Firestore
                                         onSignUpSuccess(currentUser, fullName)
                                     } else {
                                         errorMessage = "حدث خطأ في إنشاء الحساب"
                                         isLoading = false
                                     }
                                 } else {
-                                   
                                     errorMessage = getArabicErrorMessage(error)
                                     isLoading = false
                                 }
@@ -533,7 +530,6 @@ fun ForgotPasswordScreenContent(
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true,
-           
             textStyle = LocalTextStyle.current.copy(
                 textDirection = TextDirection.Ltr,
                 textAlign = TextAlign.Left
@@ -561,7 +557,6 @@ fun ForgotPasswordScreenContent(
                             successMessage = "تم إرسال الرابط إلى بريدك الإلكتروني بنجاح"
                             email = ""
                         } else {
-                        
                             errorMessage = getArabicErrorMessage(message)
                         }
                         isLoading = false
