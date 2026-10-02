@@ -36,6 +36,9 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 import android.content.Context
+import android.provider.Settings
+import com.google.firebase.messaging.FirebaseMessaging
+import androidx.compose.runtime.LaunchedEffect
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
@@ -47,24 +50,35 @@ class LoginActivity : ComponentActivity() {
         authManager = AuthManager()
 
         setContent {
-            val sharedPref = androidx.compose.ui.platform.LocalContext.current
-                .getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sharedPref = context.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
             val isParentProfileComplete = sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)
+
+            // Always refresh FCM token on app start (tokens rotate)
+            LaunchedEffect(Unit) {
+                val sharedPref = context.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+                val profileComplete = sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)
+                val currentUser = authManager.getCurrentUser()
+                if (profileComplete && currentUser != null) {
+                    saveFcmToken(currentUser.uid)
+                }
+            }
 
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 if (authManager.isParentAuthenticated() && isParentProfileComplete) {
-                    navigateToDashboard()
+                    // Make sure USER_ROLE is set before navigating
+                    LaunchedEffect(Unit) {
+                        sharedPref.edit().putString("USER_ROLE", "PARENT").apply()
+                        navigateToDashboard()
+                    }
                 } else {
                     MainLoginScreen(
                         onLoginSuccess = { parentUser ->
-                            // 1) Save PARENT_ID first (so saveFcmToken can find it)
                             markProfileComplete(parentUser.uid, parentUser.email, "")
-                            // 2) Now fetch and save the token
                             saveFcmToken(parentUser.uid)
                             navigateToDashboard()
                         },
                         onSignUpSuccess = { parentUser, fullName ->
-                            // Save to Firestore + save PARENT_ID + save token
                             saveParentToFirestore(parentUser, fullName)
                         },
                         authManager = authManager
@@ -73,6 +87,7 @@ class LoginActivity : ComponentActivity() {
             }
         }
     }
+
 
     private fun saveParentToFirestore(parentUser: ParentUser, fullName: String) {
         val db = FirebaseFirestore.getInstance()
@@ -129,10 +144,16 @@ class LoginActivity : ComponentActivity() {
      *
      * @param parentId the authenticated parent UID (must be provided!)
      */
+
     private fun saveFcmToken(parentId: String) {
+        if (parentId.isBlank()) {
+            android.util.Log.e("LoginActivity", "❌ Cannot save FCM token: parentId is blank")
+            return
+        }
+
         android.util.Log.d("LoginActivity", "🔍 Fetching FCM token for parent: $parentId")
 
-        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+        FirebaseMessaging.getInstance().token
             .addOnCompleteListener { task ->
                 if (!task.isSuccessful) {
                     android.util.Log.e("LoginActivity", "❌ Failed to get FCM token: ${task.exception?.message}")
@@ -145,19 +166,25 @@ class LoginActivity : ComponentActivity() {
                     return@addOnCompleteListener
                 }
 
-                android.util.Log.d("LoginActivity", "🔑 Got FCM token: $token")
+                val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
 
                 val db = FirebaseFirestore.getInstance()
+                val tokenMap = mapOf(
+                    "fcmToken" to token,
+                    "fcmTokens.$deviceId" to token   // nested map (dot notation for merge)
+                )
+
                 db.collection("parent").document(parentId)
-                    .set(mapOf("fcmToken" to token), SetOptions.merge())
+                    .set(tokenMap, SetOptions.merge())
                     .addOnSuccessListener {
-                        android.util.Log.d("LoginActivity", "✅ FCM Token saved for $parentId")
+                        android.util.Log.d("LoginActivity", "✅ FCM Token saved for device $deviceId under parent $parentId")
                     }
                     .addOnFailureListener { e ->
                         android.util.Log.e("LoginActivity", "❌ Failed to save token: ${e.message}")
                     }
             }
     }
+
 }
 
 @Composable

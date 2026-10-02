@@ -6,12 +6,11 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.VIBRATE" /> <!-- NEW: Add this line -->
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".MyApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -21,6 +20,7 @@
         android:theme="@style/Theme.Hami"
         tools:targetApi="31">
 
+        <!-- Launcher Activity: Starts the app on MainActivity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -48,7 +48,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Your FCM service -->
+        <!-- FCM service -->
         <service
             android:name=".FcmService"
             android:exported="false">
@@ -57,12 +57,12 @@
             </intent-filter>
         </service>
 
-        <!-- Default notification channel (used when app is in background) -->
+        <!-- Default notification channel -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="hami_alerts"/>
 
-        <!-- Default icon (optional but recommended) -->
+        <!-- Default notification icon -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_launcher_foreground"/>

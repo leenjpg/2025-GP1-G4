@@ -26,18 +26,22 @@ class FcmService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         Log.d(TAG, "📩 onMessageReceived called!")
         Log.d(TAG, "   data: ${message.data}")
-        Log.d(TAG, "   notification: ${message.notification?.title} / ${message.notification?.body}")
 
-        // If a notification payload exists, the system already displayed it.
-        // We still run our custom logic for sound/vibration/data.
+        // ✅ CRITICAL: Only show notifications on PARENT devices.
+        // The child device should NEVER display a Hami alert notification.
+        val sharedPref = getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+        val userRole = sharedPref.getString("USER_ROLE", "")
+        val isChildLoggedIn = sharedPref.getBoolean("CHILD_LOGGED_IN", false)
+
+        if (userRole == "CHILD" || isChildLoggedIn) {
+            Log.d(TAG, "⛔ Child device — skipping notification.")
+            return
+        }
+
         val alertId = message.data["alertId"] ?: System.currentTimeMillis().toString()
-        val type = message.data["type"]
-            ?: message.notification?.title
-            ?: "تنبيه"
+        val type = message.data["type"] ?: message.notification?.title ?: "تنبيه"
         val childName = message.data["childName"] ?: "الطفل"
         val confidence = message.data["confidence"]?.toFloatOrNull() ?: 0.0f
-
-        Log.d(TAG, "   parsed → alertId=$alertId, type=$type, child=$childName, conf=$confidence")
 
         showNotification(
             title = getNotificationTitle(type, confidence),

@@ -74,12 +74,10 @@ class ChildLoginActivity : ComponentActivity() {
                 ChildLoginScreen(
                     onLoginSuccess = { parentUser, selectedChild ->
                         saveChildLogin(parentUser, selectedChild)
-                        saveFcmTokenForParent()
                         navigateToChildStatus()
                     },
                     onCreateNewChild = { parentUser, childName, childAge ->
                         createNewChild(parentUser, childName, childAge)
-                        saveFcmTokenForParent()
                         navigateToChildStatus()
                     },
                     authManager = authManager
@@ -155,28 +153,6 @@ class ChildLoginActivity : ComponentActivity() {
         val intent = Intent(this, ChildStatusActivity::class.java)
         startActivity(intent)
         finish()
-    }
-    private fun saveFcmTokenForParent() {
-        val sharedPref = getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
-        val parentId = sharedPref.getString("PARENT_ID", null) ?: return
-
-        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val token = task.result
-                    if (token != null) {
-                        val db = FirebaseFirestore.getInstance()
-                        db.collection("parent").document(parentId)
-                            .update("fcmToken", token)
-                            .addOnSuccessListener {
-                                android.util.Log.d("ChildLogin", "✅ FCM Token saved for parent: $parentId")
-                            }
-                            .addOnFailureListener { e ->
-                                android.util.Log.e("ChildLogin", "❌ Failed to save token: ${e.message}")
-                            }
-                    }
-                }
-            }
     }
 }
 

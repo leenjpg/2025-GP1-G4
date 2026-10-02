@@ -56,15 +56,24 @@ class ChildStatusActivity : ComponentActivity() {
     }
 
     private fun logout() {
-        // Clear saved data
         val sharedPref = getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+        val childId = sharedPref.getString("CHILD_ID", "")
+
+        // 1. Update service status in Firestore before clearing prefs
+        if (!childId.isNullOrEmpty()) {
+            val db = FirebaseFirestore.getInstance()
+            db.collection("child").document(childId)
+                .update("accessibilityServiceEnabled", false)
+        }
+
+        // 2. Clear saved preferences (this sets CHILD_LOGGED_IN to false)
         sharedPref.edit().clear().apply()
 
-        // Sign out from Firebase Auth if parent is logged in
+        // 3. Sign out from Firebase Auth
         val authManager = AuthManager()
         authManager.logoutParent()
 
-        // Go back to main activity
+        // 4. Navigate back to Main / Login Activity
         val intent = Intent(this, MainActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)

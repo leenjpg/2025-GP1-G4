@@ -38,7 +38,21 @@ class HamiAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // إذا ما فيه حدث أو الـ IDs لسه unknown، لا تسوي شيء
+        // 1. Check current logged-in user state dynamically from SharedPreferences
+        val sharedPref = applicationContext.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+        val isChildLoggedIn = sharedPref.getBoolean("CHILD_LOGGED_IN", false)
+        val userRole = sharedPref.getString("USER_ROLE", "")
+
+        // 2. Stop monitoring immediately if a child is NOT logged in or if user is on Parent mode
+        if (!isChildLoggedIn || userRole != "CHILD") {
+            Log.d("HamiSecurity", "⛔ Accessibility monitoring stopped: Parent logged in or Child logged out.")
+            return
+        }
+
+        // Refresh childId and parentId dynamically
+        childId = sharedPref.getString("CHILD_ID", "unknown") ?: "unknown"
+        parentId = sharedPref.getString("PARENT_ID", "unknown") ?: "unknown"
+
         if (event == null || childId == "unknown") return
 
         var capturedText = ""
@@ -66,14 +80,11 @@ class HamiAccessibilityService : AccessibilityService() {
             }
         }
 
-
         if (capturedText.length < 3) return
-
 
         if (sourceContext == "notification") {
             analyzeText(capturedText, sourceContext)
         } else {
-
             analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
             analysisRunnable = Runnable { analyzeText(capturedText, sourceContext) }
             analysisHandler.postDelayed(analysisRunnable!!, 1500)
@@ -155,10 +166,26 @@ class HamiAccessibilityService : AccessibilityService() {
         return text
     }
 
-    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String) {
+    private fun saveAlertToFirestore(
+        detectedText: String,
+        type: String,
+        severity: String,
+        confidence: Float,
+        sourceContext: String
+    ) {
+        if (parentId == "unknown" || parentId.isEmpty()) {
+            Log.e("HamiSecurity", "❌ Cannot save alert: parentId is unknown.")
+            return
+        }
+
+        if (childId == "unknown" || childId.isEmpty()) {
+            Log.e("HamiSecurity", "❌ Cannot save alert: childId is unknown.")
+            return
+        }
+
         val vault = HamiSecurityVault(applicationContext)
         val alert = AlertItem(
-            text = detectedText, 
+            text = detectedText,
             riskLabel = type,
             timestamp = System.currentTimeMillis(),
             confidence = confidence,
@@ -167,7 +194,9 @@ class HamiAccessibilityService : AccessibilityService() {
             read = false,
             context = sourceContext
         )
+
         vault.saveAlert(alert)
+        Log.d("HamiSecurity", "✅ Alert successfully handed to vault for sync: $type")
     }
 
     private fun updateServiceStatus(enabled: Boolean) {
