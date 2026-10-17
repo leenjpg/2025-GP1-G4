@@ -138,67 +138,76 @@ class DashboardActivity : ComponentActivity() {
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
 
-        android.util.Log.d("Dashboard", "loadAlertsFromFirestore called")
-
         if (currentUser == null) {
-            android.util.Log.e("Dashboard", "No user logged in!")
             onComplete("الرجاء تسجيل الدخول أولاً")
             return
         }
 
         val parentId = currentUser.uid
-        android.util.Log.d("Dashboard", "Loading alerts for parentId: $parentId")
 
-        
-        db.collection("alert")
+        // STEP 1: Fetch the parent's children first (so we can map childId -> name)
+        db.collection("child")
             .whereEqualTo("parentId", parentId)
-            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
             .get()
-            .addOnSuccessListener { snapshot ->
-                android.util.Log.d("Dashboard", "Got ${snapshot.documents.size} documents from Firestore")
-
-                val allAlerts = mutableListOf<AlertItem>()
-                val unreadAlerts = mutableListOf<AlertItem>()
-
-                for (document in snapshot.documents) {
-                    val type = document.getString("type")?.lowercase() ?: ""
-                    val isRead = document.getBoolean("read") ?: false
-                    val timestamp = document.getTimestamp("timestamp")?.toDate()?.time ?: System.currentTimeMillis()
-
-                    if (threatTypes.contains(type)) {
-                        val encryptedText = document.getString("text") ?: ""
-                        val vault = HamiSecurityVault(this)
-                        val decryptedText = vault.decryptAES256(encryptedText)
-
-                        val alert = AlertItem(
-                            text = decryptedText, // فك التشفير
-                            riskLabel = type,
-                            timestamp = timestamp,
-                            confidence = 0.0f,
-                            childId = "",
-                            parentId = "",
-                            read = isRead,
-                            context = document.getString("context") ?: "unknown",
-                            documentId = document.id
-                        )
-                        allAlerts.add(alert)
-                        if (!isRead) {
-                            unreadAlerts.add(alert)
-                        }
-                    }
+            .addOnSuccessListener { childSnapshot ->
+                val childNameMap = mutableMapOf<String, String>()
+                for (doc in childSnapshot.documents) {
+                    val id = doc.getString("childId") ?: doc.id
+                    val name = doc.getString("childName") ?: "طفل"
+                    childNameMap[id] = name
                 }
 
-                allList.clear()
-                allList.addAll(allAlerts)
-                unreadList.clear()
-                unreadList.addAll(unreadAlerts)
+                // STEP 2: Now fetch the alerts
+                db.collection("alert")
+                    .whereEqualTo("parentId", parentId)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .get()
+                    .addOnSuccessListener { snapshot ->
+                        val allAlerts = mutableListOf<AlertItem>()
+                        val unreadAlerts = mutableListOf<AlertItem>()
+                        val vault = HamiSecurityVault(this)
 
-                android.util.Log.d("Dashboard", "Loaded ${allAlerts.size} total alerts, ${unreadAlerts.size} unread")
-                onComplete(null)
+                        for (document in snapshot.documents) {
+                            val type = document.getString("type")?.lowercase() ?: ""
+                            val isRead = document.getBoolean("read") ?: false
+                            val timestamp = document.getTimestamp("timestamp")?.toDate()?.time
+                                ?: System.currentTimeMillis()
+                            val alertChildId = document.getString("childId") ?: ""
+
+                            if (threatTypes.contains(type)) {
+                                val encryptedText = document.getString("text") ?: ""
+                                val decryptedText = vault.decryptAES256(encryptedText)
+
+                                val alert = AlertItem(
+                                    text = decryptedText,
+                                    riskLabel = type,
+                                    timestamp = timestamp,
+                                    confidence = document.getDouble("confidence")?.toFloat() ?: 0f,
+                                    childId = alertChildId,
+                                    childName = childNameMap[alertChildId] ?: "طفل",
+                                    parentId = parentId,
+                                    read = isRead,
+                                    context = document.getString("context") ?: "unknown",
+                                    documentId = document.id
+                                )
+                                allAlerts.add(alert)
+                                if (!isRead) unreadAlerts.add(alert)
+                            }
+                        }
+
+                        allList.clear()
+                        allList.addAll(allAlerts)
+                        unreadList.clear()
+                        unreadList.addAll(unreadAlerts)
+
+                        onComplete(null)
+                    }
+                    .addOnFailureListener { e ->
+                        onComplete("فشل تحميل التنبيهات: ${e.message}")
+                    }
             }
             .addOnFailureListener { e ->
-                android.util.Log.e("Dashboard", "Failed to load alerts: ${e.message}")
-                onComplete("فشل تحميل البيانات: ${e.message}")
+                onComplete("فشل تحميل بيانات الأطفال: ${e.message}")
             }
     }
 }
@@ -306,16 +315,42 @@ fun SafetyTipsTabContent() {
 }
 
 @Composable
-fun AlertsTabContent(alerts: List<AlertItem>, onMarkAsRead: (AlertItem) -> Unit) {
+fun AlertsTabContent(
+    alerts: List<AlertItem>,
+    onMarkAsRead: (AlertItem) -> Unit
+) {
     val hamiTeal = Color(0xFF52879C)
-    val backgroundGradient = Brush.linearGradient(colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF)))
+    val backgroundGradient = Brush.linearGradient(
+        colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF))
+    )
 
-    Column(modifier = Modifier.fillMaxSize().background(backgroundGradient).padding(16.dp)) {
-        Text("التنبيهات الجديدة", style = MaterialTheme.typography.headlineSmall, fontFamily = AlfontDark, color = hamiTeal)
+    // Group alerts by childId (preserving childName)
+    val grouped = remember(alerts) {
+        alerts
+            .groupBy { it.childId }
+            .mapValues { (_, list) -> list.sortedByDescending { it.timestamp } }
+    }
 
-
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundGradient)
+            .padding(16.dp)
+    ) {
+        Text(
+            "التنبيهات الجديدة",
+            style = MaterialTheme.typography.headlineSmall,
+            fontFamily = AlfontDark,
+            color = hamiTeal
+        )
         Spacer(modifier = Modifier.height(8.dp))
-        Text("اسحب التنبيه لتحديد كمقروء", fontSize = 12.sp, color = Color(0xFF788B94), fontFamily = AlfontDark)
+        Text(
+            "اسحب التنبيه لتحديد كمقروء",
+            fontSize = 12.sp,
+            color = Color(0xFF788B94),
+            fontFamily = AlfontDark
+        )
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (alerts.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -325,11 +360,71 @@ fun AlertsTabContent(alerts: List<AlertItem>, onMarkAsRead: (AlertItem) -> Unit)
                     Text("لا توجد تنبيهات جديدة", color = Color(0xFF788B94), fontFamily = AlfontDark)
                 }
             }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(alerts, key = { it.documentId }) { alert ->
-                    SwipeToMarkReadCard(alert = alert, onMarkAsRead = { onMarkAsRead(alert) })
+            return@Column
+        }
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            grouped.forEach { (childId, childAlerts) ->
+                val childName = childAlerts.firstOrNull()?.childName ?: "طفل"
+
+                // ===== Child section header =====
+                item(key = "header_$childId") {
+                    ChildHeaderBlock(
+                        childName = childName,
+                        count = childAlerts.size,
+                        color = hamiTeal
+                    )
                 }
+
+                // ===== This child's alerts =====
+                items(childAlerts, key = { it.documentId }) { alert ->
+                    SwipeToMarkReadCard(
+                        alert = alert,
+                        onMarkAsRead = { onMarkAsRead(alert) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChildHeaderBlock(childName: String, count: Int, color: Color) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RectangleShape,
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("👤", fontSize = 18.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = childName,
+                    fontSize = 16.sp,
+                    fontFamily = AlfontDark,
+                    fontWeight = FontWeight.Bold,
+                    color = color
+                )
+            }
+            Surface(
+                color = color,
+                shape = RectangleShape
+            ) {
+                Text(
+                    text = "$count",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontFamily = AlfontDark,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
             }
         }
     }
@@ -390,16 +485,19 @@ fun AlertCard(alert: AlertItem) {
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+            // ===== Header row: risk label + child name + timestamp =====
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Risk type badge
                     Surface(color = riskColor.copy(alpha = 0.1f)) {
                         Text(
                             displayName,
@@ -409,31 +507,70 @@ fun AlertCard(alert: AlertItem) {
                             modifier = Modifier.padding(4.dp)
                         )
                     }
-                    Text(
-                        sdf.format(Date(alert.timestamp)),
-                        color = Color.Gray,
-                        fontSize = 12.sp,
-                        fontFamily = AlfontDark
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
 
-                if (showAlertText) {
-                    // Show the full text
-                    Text(alert.text, fontSize = 14.sp, fontFamily = AlfontDark)
-                } else {
-                    // Hide the text, show a placeholder
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("🔒", fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "النص مخفي - فعّل الإظهار من الإعدادات",
-                            fontSize = 13.sp,
-                            fontFamily = AlfontDark,
-                            color = Color.Gray
-                        )
+                    // Child name badge (only if present)
+                    if (alert.childName.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("👤", fontSize = 11.sp)
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                alert.childName,
+                                color = Color(0xFF788B94),
+                                fontSize = 12.sp,
+                                fontFamily = AlfontDark,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
+
+                // Timestamp
+                Text(
+                    sdf.format(Date(alert.timestamp)),
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    fontFamily = AlfontDark
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // ===== Body: alert text (hidden by default) =====
+            if (showAlertText) {
+                Text(
+                    text = alert.text,
+                    fontSize = 14.sp,
+                    fontFamily = AlfontDark
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🔒", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "النص مخفي - فعّل الإظهار من الإعدادات",
+                        fontSize = 13.sp,
+                        fontFamily = AlfontDark,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            // ===== Optional footer: context chip =====
+            if (alert.context.isNotEmpty() && alert.context != "unknown") {
+                Spacer(modifier = Modifier.height(8.dp))
+                val contextLabel = when (alert.context) {
+                    "keyboard_input" -> "⌨️ لوحة المفاتيح"
+                    "notification" -> "🔔 إشعار"
+                    "screen_reading" -> "📱 قراءة الشاشة"
+                    else -> alert.context
+                }
+                Text(
+                    text = contextLabel,
+                    fontSize = 11.sp,
+                    fontFamily = AlfontDark,
+                    color = Color(0xFFB0BEC5)
+                )
             }
         }
     }

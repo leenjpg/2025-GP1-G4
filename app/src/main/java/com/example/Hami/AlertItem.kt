@@ -6,6 +6,8 @@ data class AlertItem(
     val timestamp: Long,
     val confidence: Float,
     val childId: String,
+
+    val childName: String = "",
     val parentId: String,
     val read: Boolean = false,
     val context: String = "keyboard_input",
