@@ -5,7 +5,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
-import com.google.firebase.firestore.FirebaseFirestore //for syncing-leen
+import com.google.firebase.firestore.FirebaseFirestore
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Date
@@ -20,7 +20,7 @@ class HamiSecurityVault(context: Context) {
     private val masterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
-    private val masterKeyAlias = MasterKey.DEFAULT_MASTER_KEY_ALIAS //forfirebase fucntion
+    private val masterKeyAlias = MasterKey.DEFAULT_MASTER_KEY_ALIAS
 
     private val sharedPreferences = EncryptedSharedPreferences.create(
         context,
@@ -28,11 +28,12 @@ class HamiSecurityVault(context: Context) {
         masterKey,
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    ) // next is encrytpion function - leen
+    )
+
     fun saveSuspiciousText(text: String, riskType: String = "Pending", severity: String = "Unknown") {
         val messagesList = getAllMessages().toMutableList()
 
-        val messageObject = JSONObject().apply { //asn entire objj
+        val messageObject = JSONObject().apply {
             put("text", text)
             put("riskType", riskType)
             put("severity", severity)
@@ -47,7 +48,7 @@ class HamiSecurityVault(context: Context) {
         sharedPreferences.edit().putString("all_messages", jsonArray.toString()).apply()
     }
 
-    fun getAllMessages(): List<JSONObject> { //like set and get
+    fun getAllMessages(): List<JSONObject> {
         val jsonString = sharedPreferences.getString("all_messages", "[]") ?: "[]"
         val jsonArray = JSONArray(jsonString)
         val messages = mutableListOf<JSONObject>()
@@ -58,19 +59,20 @@ class HamiSecurityVault(context: Context) {
         return messages
     }
 
-    fun getHighRiskMessages(): List<JSONObject> { //filtering (later fixed w model)
+    fun getHighRiskMessages(): List<JSONObject> {
         return getAllMessages().filter {
             it.optString("severity", "Unknown") == "High"
         }
     }
 
-    fun clearAllMessages() { //testing
+    fun clearAllMessages() {
         sharedPreferences.edit().remove("all_messages").apply()
     }
 
-    fun hasAnyThreats(): Boolean { //dbl check
+    fun hasAnyThreats(): Boolean {
         return getAllMessages().isNotEmpty()
     }
+
     fun getAlertsList(): List<AlertItem> {
         val alerts = mutableListOf<AlertItem>()
         val jsonString = sharedPreferences.getString("all_messages", "[]") ?: "[]"
@@ -79,7 +81,17 @@ class HamiSecurityVault(context: Context) {
         for (i in 0 until jsonArray.length()) {
             val obj = jsonArray.getJSONObject(i)
             val riskType = obj.optString("riskType", "Pending")
+
             if (riskType != "Neutral") {
+                // استخراج الكلمات المفتاحية من التخزين المحلي
+                val keywordsJsonArray = obj.optJSONArray("keywords")
+                val keywordsList = mutableListOf<String>()
+                if (keywordsJsonArray != null) {
+                    for (j in 0 until keywordsJsonArray.length()) {
+                        keywordsList.add(keywordsJsonArray.getString(j))
+                    }
+                }
+
                 alerts.add(
                     AlertItem(
                         text = obj.optString("text", ""),
@@ -90,7 +102,8 @@ class HamiSecurityVault(context: Context) {
                         parentId = obj.optString("parentId", "unknown"),
                         read = obj.optBoolean("read", false),
                         actionTaken = obj.optString("actionTaken", null),
-                        context = obj.optString("context", "keyboard_input")
+                        context = obj.optString("context", "keyboard_input"),
+                        keywords = keywordsList // إضافة الكلمات هنا
                     )
                 )
             }
@@ -112,7 +125,7 @@ class HamiSecurityVault(context: Context) {
         messagesList.forEach { jsonArray.put(it) }
         sharedPreferences.edit().putString("all_messages", jsonArray.toString()).apply()
     }
-    //  only for final alerts - leen
+
     fun saveAlert(alert: AlertItem) {
         val messageObject = JSONObject().apply {
             put("text", alert.text)
@@ -122,6 +135,7 @@ class HamiSecurityVault(context: Context) {
             put("childId", alert.childId)
             put("parentId", alert.parentId)
             put("confidence", alert.confidence)
+            put("keywords", JSONArray(alert.keywords)) // حفظ الكلمات المفتاحية محلياً
         }
 
         syncAlertToFirebase(alert)
@@ -143,6 +157,8 @@ class HamiSecurityVault(context: Context) {
 
             val alertData = hashMapOf(
                 "text" to encryptedText,
+                "keywords" to alert.keywords,
+                "appName" to alert.appName,
                 "type" to alert.riskLabel.lowercase(),
                 "severity" to "high",
                 "timestamp" to com.google.firebase.Timestamp(Date(alert.timestamp)),
@@ -152,7 +168,7 @@ class HamiSecurityVault(context: Context) {
                 "context" to alert.context,
                 "read" to alert.read,
                 "actionTaken" to alert.actionTaken,
-                // "detectedText" to encryptedText  // enc -leen
+                "keywords" to alert.keywords // السطر الذي تمت إضافته لرفع الكلمات للفايربيس
             )
 
             db.collection("alert")
@@ -168,7 +184,8 @@ class HamiSecurityVault(context: Context) {
             android.util.Log.e("FIREBASE_SYNC", "Error: ${e.message}")
         }
     }
-    private fun encryptAES256(plainText: String): String { // for firebase sync-encytped - diff than salmas enc
+
+    private fun encryptAES256(plainText: String): String {
         return try {
             val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {
                 load(null)
@@ -187,6 +204,7 @@ class HamiSecurityVault(context: Context) {
             plainText
         }
     }
+
     fun decryptAES256(encryptedText: String): String {
         return try {
             val keyStore = KeyStore.getInstance("AndroidKeyStore").apply {

@@ -2,97 +2,183 @@ package com.example.aimoduel
 
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.Timestamp
-import java.util.Date
 import android.content.Context
 
 class HamiAccessibilityService : AccessibilityService() {
 
-    private lateinit var aiAnalyzer: HamiAIAnalyzer
+    private lateinit var aiAnalyzer: AiEngine
     private val db = FirebaseFirestore.getInstance()
-
-    // IDs from SharedPreferences
+    private var lastKnownPackage: String = ""
     private var childId: String = "unknown"
     private var parentId: String = "unknown"
+
+    // (لمنع التكرار الذكي)
+    private val alertedWordsPool = mutableMapOf<String, Long>()
+    // تم إصلاح علامات الضرب هنا
+    private val ONE_DAY_MS = 24 * 60 * 60 * 1000L
 
     private val analysisHandler = Handler(Looper.getMainLooper())
     private var analysisRunnable: Runnable? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        aiAnalyzer = AiEngine(applicationContext)
 
-        aiAnalyzer = HamiAIAnalyzer(applicationContext)
-
-        // Load IDs from SharedPreferences
+        // جلب الـ IDs من الذاكرة
         val sharedPref = applicationContext.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
         childId = sharedPref.getString("CHILD_ID", "unknown") ?: "unknown"
         parentId = sharedPref.getString("PARENT_ID", "unknown") ?: "unknown"
 
-        // Update Firestore that service is enabled
         updateServiceStatus(true)
-
         Log.d("HamiSecurity", "✅ Service connected - Child: $childId, Parent: $parentId")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null) return
+        // إذا ما فيه حدث أو الـ IDs لسه unknown، لا تسوي شيء
+        if (event == null || childId == "unknown") return
 
-        val eventType = event.eventType
+        var capturedText = ""
+        var sourceContext = "unknown"
 
-        // Only care about text changes
-        if (eventType == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
-            var capturedText = event.text.joinToString(" ").trim()
-            if (capturedText.isEmpty()) {
-                capturedText = event.source?.text?.toString() ?: ""
-            }
+        // 1. استخراج اسم الحزمة وتحويله لاسم تطبيق مقروء
+        val activePackage = rootInActiveWindow?.packageName?.toString()
+        val packageName = activePackage ?: event.packageName?.toString() ?: ""
 
-            // Only analyze if text is long enough and contains a space
-            if (capturedText.length > 5 && capturedText.contains(" ")) {
-                analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+        Log.d("HamiSecurity", "Current Package Name: $packageName")
 
-                analysisRunnable = Runnable {
-                    // Process with AI
-                    aiAnalyzer.process(capturedText) { label, confidence ->
+        val appName = when {
+            packageName.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
+            packageName.contains("instagram", ignoreCase = true) -> "Instagram"
+            packageName.contains("snapchat", ignoreCase = true) -> "Snapchat"
+            packageName.contains("tiktok", ignoreCase = true) || packageName.contains("musically", ignoreCase = true) -> "TikTok"
+            packageName.contains("roblox", ignoreCase = true) -> "Roblox"
+            packageName.contains("youtube", ignoreCase = true) -> "YouTube"
+            packageName.contains("messaging", ignoreCase = true) || packageName.contains("message", ignoreCase = true) || packageName.contains("mms", ignoreCase = true) -> "Messages"
+            else -> "تطبيق آخر"
+        }
 
-                        Log.d("HamiSecurity", "📊 Analysis: $label with ${"%.1f".format(confidence * 100)}% confidence")
-
-                        // ONLY save if it's dangerous (not Neutral) AND confidence > 60%
-                        if (label != "Neutral" && confidence > 0.6) {
-
-                            // Determine severity based on confidence
-                            val severity = when {
-                                confidence > 0.85 -> "high"
-                                confidence > 0.7 -> "medium"
-                                else -> "low"
-                            }
-
-                            Log.w("HamiSecurity", "⚠️ DANGEROUS CONTENT DETECTED!")
-                            Log.w("HamiSecurity", "   Type: $label")
-                            Log.w("HamiSecurity", "   Severity: $severity")
-                            Log.w("HamiSecurity", "   Text: $capturedText")
-
-                            // Save to Firestore
-                            saveAlertToFirestore(
-                                detectedText = capturedText,
-                                type = label,
-                                severity = severity,
-                                confidence = confidence
-                            )
-                        } else {
-                            Log.d("HamiSecurity", "✅ Content is safe (${label} with ${"%.1f".format(confidence * 100)}%)")
-                        }
-                    }
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
+                val notificationDetails = event.text
+                if (notificationDetails.isNotEmpty()) {
+                    capturedText = notificationDetails.joinToString(" ").trim()
                 }
-                analysisHandler.postDelayed(analysisRunnable!!, 1000)
+                sourceContext = "notification"
+            }
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                capturedText = event.text.joinToString(" ").trim()
+                sourceContext = "keyboard_input"
+            }
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                val rootNode = rootInActiveWindow
+                if (rootNode != null) {
+                    capturedText = extractTextFromNode(rootNode).trim()
+                    sourceContext = "screen_reading"
+                }
+            }
+        }
+
+        if (capturedText.length < 3) return
+
+        // 2. تمرير اسم التطبيق (appName) لدالة التحليل
+        if (sourceContext == "notification") {
+            analyzeText(capturedText, sourceContext, appName)
+        } else {
+            analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+            analysisRunnable = Runnable { analyzeText(capturedText, sourceContext, appName) }
+            analysisHandler.postDelayed(analysisRunnable!!, 1500)
+        }
+    }
+
+    private fun extractArabicWords(text: String): Set<String> {
+        // قائمة بكلمات التوقف العربية الشائعة (الضمائر، حروف الجر، أدوات الاستفهام)
+        val stopWords = setOf(
+            "من", "الى", "إلى", "عن", "على", "في", "انا", "أنا", "انت", "أنت", "انتي", "أنتي",
+            "هو", "هي", "نحن", "هم", "هن", "هذا", "هذه", "ذلك", "تلك", "الذي", "التي",
+            "يا", "لا", "ما", "هل", "كم", "كيف", "متى", "اين", "أين", "لو", "ان", "إن",
+            "اذا", "إذا", "كان", "كانت", "وش", "اللي", "ياخي", "طيب", "بس"
+        )
+
+        return text.replace(Regex("[^\\u0600-\\u06FF]"), " ")
+            .split(Regex("\\s+"))
+            .map { it.trim() }
+            // نأخذ الكلمة فقط إذا كان طولها أكثر من حرفين، ولا توجد في قائمة كلمات التوقف
+            .filter { it.length > 2 && !stopWords.contains(it) }
+            .toSet()
+    }
+
+    // تم إضافة appName هنا
+    private fun analyzeText(rawText: String, sourceContext: String, appName: String) {
+        val allArabicWords = extractArabicWords(rawText)
+        if (allArabicWords.isEmpty()) return
+
+        val currentTime = System.currentTimeMillis()
+        val newWordsList = mutableListOf<String>()
+
+        for (word in allArabicWords) {
+            val savedTime = alertedWordsPool[word]
+            if (savedTime != null) {
+                if (currentTime - savedTime >= ONE_DAY_MS) {
+                    alertedWordsPool.remove(word)
+                    newWordsList.add(word)
+                }
+            } else {
+                newWordsList.add(word) // كلمة جديدة كلياً
+            }
+        }
+
+        val textToAnalyze = newWordsList.joinToString(" ")
+
+        if (textToAnalyze.isBlank()) {
+            Log.d("HamiSecurity", "⏳ تم الصد: النص موجود مسبقاً في الذاكرة كإشعار أو شاشة.")
+            return
+        }
+
+        aiAnalyzer.process(textToAnalyze) { label, confidence ->
+            if (label != "Neutral" && confidence > 0.6) {
+
+                // 4. الحجز المسبق: بما أن الكلمات الجديدة هذي سببت تنبيه، نحفظها في الذاكرة لمدة 24 ساعة
+                for (word in newWordsList) {
+                    alertedWordsPool[word] = System.currentTimeMillis()
+                }
+
+                val severity = when {
+                    confidence > 0.85 -> "high"
+                    confidence > 0.7 -> "medium"
+                    else -> "low"
+                }
+
+                Log.w("HamiSecurity", "⚠️ ALERT: $label detected via $sourceContext in $appName")
+
+                // تم إضافة تمرير appName لدالة الحفظ
+                saveAlertToFirestore(rawText, label, severity, confidence, sourceContext, newWordsList, appName)
             }
         }
     }
 
-    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float) {
+    private fun extractTextFromNode(node: AccessibilityNodeInfo?): String {
+        if (node == null) return ""
+        var text = ""
+        if (!node.text.isNullOrEmpty()) {
+            text += node.text.toString() + " "
+        } else if (!node.contentDescription.isNullOrEmpty()) {
+            text += node.contentDescription.toString() + " "
+        }
+
+        for (i in 0 until node.childCount) {
+            text += extractTextFromNode(node.getChild(i))
+        }
+        return text
+    }
+
+    // تم إضافة المعامل appName في الدالة
+    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String, keywords: List<String>, appName: String) {
         val vault = HamiSecurityVault(applicationContext)
         val alert = AlertItem(
             text = detectedText,
@@ -102,8 +188,9 @@ class HamiAccessibilityService : AccessibilityService() {
             childId = childId,
             parentId = parentId,
             read = false,
-            actionTaken = null,
-            context = "keyboard_input"
+            context = sourceContext,
+            keywords = keywords,
+            appName = appName // تم ربط اسم التطبيق
         )
         vault.saveAlert(alert)
     }
@@ -127,7 +214,6 @@ class HamiAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Update Firestore that service is disabled
         updateServiceStatus(false)
         Log.d("HamiSecurity", "🧹 Service destroyed and cleaned up")
     }

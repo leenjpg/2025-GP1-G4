@@ -10,7 +10,7 @@ import java.nio.channels.FileChannel
 import java.util.concurrent.Executors
 import org.tensorflow.lite.Interpreter
 
-class HamiAIAnalyzer(private val context: Context) {
+class AiEngine(private val context: Context) {
 
     private val maxSeqLen = 128
     private val executor = Executors.newSingleThreadExecutor()

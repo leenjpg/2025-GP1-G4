@@ -10,5 +10,8 @@ data class AlertItem(
     val read: Boolean = false,
     val actionTaken: String? = null,
     val context: String = "keyboard_input",
-    val documentId: String = ""
+    val documentId: String = "",
+    val keywords: List<String> = emptyList(),
+    val appName: String = "غير معروف"
+
 )
