@@ -168,7 +168,7 @@ class HamiSecurityVault(context: Context) {
                 "context" to alert.context,
                 "read" to alert.read,
                 "actionTaken" to alert.actionTaken,
-                "keywords" to alert.keywords // السطر الذي تمت إضافته لرفع الكلمات للفايربيس
+
             )
 
             db.collection("alert")

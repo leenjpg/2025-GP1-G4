@@ -129,7 +129,7 @@ class HamiAccessibilityService : AccessibilityService() {
                     newWordsList.add(word)
                 }
             } else {
-                newWordsList.add(word) // كلمة جديدة كلياً
+                newWordsList.add(word)
             }
         }
 
@@ -143,21 +143,48 @@ class HamiAccessibilityService : AccessibilityService() {
         aiAnalyzer.process(textToAnalyze) { label, confidence ->
             if (label != "Neutral" && confidence > 0.6) {
 
-                // 4. الحجز المسبق: بما أن الكلمات الجديدة هذي سببت تنبيه، نحفظها في الذاكرة لمدة 24 ساعة
-                for (word in newWordsList) {
-                    alertedWordsPool[word] = System.currentTimeMillis()
-                }
-
+                // 1. تعريف الـ severity هنا أول شيء عشان يختفي الخطأ الأحمر
                 val severity = when {
                     confidence > 0.85 -> "high"
                     confidence > 0.7 -> "medium"
                     else -> "low"
                 }
 
+                // 2. تحديث الذاكرة لمنع التكرار
+                for (word in newWordsList) {
+                    alertedWordsPool[word] = System.currentTimeMillis()
+                }
+
                 Log.w("HamiSecurity", "⚠️ ALERT: $label detected via $sourceContext in $appName")
 
-                // تم إضافة تمرير appName لدالة الحفظ
-                saveAlertToFirestore(rawText, label, severity, confidence, sourceContext, newWordsList, appName)
+                // 3. فلترة الكلمات لمعرفة الشتيمة
+                val offensiveKeywords = mutableListOf<String>()
+                var wordsChecked = 0
+
+                if (newWordsList.size == 1) {
+                    saveAlertToFirestore(rawText, label, severity, confidence, sourceContext, newWordsList, appName)
+                    return@process
+                }
+
+                for (word in newWordsList) {
+                    aiAnalyzer.process(word) { wordLabel, _ ->
+                        if (wordLabel != "Neutral") {
+                            offensiveKeywords.add(word)
+                        }
+                        wordsChecked++
+
+                        // 4. الحفظ النهائي بعد فحص كل الكلمات
+                        if (wordsChecked == newWordsList.size) {
+                            // كحل احتياطي: لو المودل ما لقط الشتيمة المفردة، نرسل قائمة فارغة للداشبورد عشان ما تتلوث الاحصائية
+                            val finalKeywords = if (offensiveKeywords.isNotEmpty()) offensiveKeywords else emptyList()
+
+                            saveAlertToFirestore(
+                                rawText, label, severity, confidence,
+                                sourceContext, finalKeywords, appName
+                            )
+                        }
+                    }
+                }
             }
         }
     }
