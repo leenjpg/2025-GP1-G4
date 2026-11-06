@@ -300,7 +300,7 @@ fun ChildLoginScreen(
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                
+
                 textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
             )
 

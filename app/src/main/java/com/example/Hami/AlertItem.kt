@@ -6,10 +6,13 @@ data class AlertItem(
     val timestamp: Long,
     val confidence: Float,
     val childId: String,
-
-    val childName: String = "",
     val parentId: String,
+    val childName: String = "",
+
     val read: Boolean = false,
+    val actionTaken: String? = null,
     val context: String = "keyboard_input",
-    val documentId: String = ""
+    val documentId: String = "",
+    val keywords: List<String> = emptyList(),
+    val appName: String = "غير معروف"
 )
