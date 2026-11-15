@@ -8,12 +8,16 @@ import android.os.Handler
 import android.os.Looper
 import com.google.firebase.firestore.FirebaseFirestore
 import android.content.Context
+import com.example.Hami.quiz.manager.QuizManager
+import com.example.Hami.quiz.manager.QuizTriggerManager
+import com.example.Hami.quiz.ui.QuizOverlayController
 
 class HamiAccessibilityService : AccessibilityService() {
 
     private lateinit var aiAnalyzer: AiEngine
     private val db = FirebaseFirestore.getInstance()
-    private var lastKnownPackage: String = ""
+    private var activeQuizChildId: String? = null
+    private var lastAlertTimestamp: Long = 0L
     private var childId: String = "unknown"
     private var parentId: String = "unknown"
 
@@ -35,12 +39,43 @@ class HamiAccessibilityService : AccessibilityService() {
         parentId = sharedPref.getString("PARENT_ID", "unknown") ?: "unknown"
 
         updateServiceStatus(true)
+        // Only resume a quiz on an authenticated child's device.
+        if (sharedPref.getBoolean("CHILD_LOGGED_IN", false) &&
+            sharedPref.getString("USER_ROLE", "") == "CHILD" && childId != "unknown") {
+            activeQuizChildId = childId
+            QuizTriggerManager.onServiceStarted(this, childId)
+        }
         Log.d("HamiSecurity", "✅ Service connected - Child: $childId, Parent: $parentId")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // إذا ما فيه حدث أو الـ IDs لسه unknown، لا تسوي شيء
-        if (event == null || childId == "unknown") return
+        // Re-check the role on every event. The accessibility service can remain enabled
+        // while parent/child accounts change, so never analyze the parent's screen.
+        val prefs = applicationContext.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+        val childLoggedIn = prefs.getBoolean("CHILD_LOGGED_IN", false) &&
+                prefs.getString("USER_ROLE", "") == "CHILD"
+        if (!childLoggedIn) {
+            if (activeQuizChildId != null) QuizOverlayController.dismissForServiceStop()
+            activeQuizChildId = null
+            alertedWordsPool.clear() // Do not carry the previous child's deduplication history.
+            analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+            analysisRunnable = null
+            return
+        }
+        childId = prefs.getString("CHILD_ID", "unknown") ?: "unknown"
+        parentId = prefs.getString("PARENT_ID", "unknown") ?: "unknown"
+        if (event == null || childId == "unknown" || parentId == "unknown") return
+
+        if (activeQuizChildId != childId) {
+            if (activeQuizChildId != null) QuizOverlayController.dismissForServiceStop()
+            analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+            analysisRunnable = null
+            alertedWordsPool.clear()
+            activeQuizChildId = childId
+            QuizTriggerManager.onServiceStarted(this, childId)
+        }
+        // The child's own learning overlay must not generate harmful-language alerts.
+        if (QuizManager.isQuizShowing) return
 
         var capturedText = ""
         var sourceContext = "unknown"
@@ -88,10 +123,14 @@ class HamiAccessibilityService : AccessibilityService() {
 
         // 2. تمرير اسم التطبيق (appName) لدالة التحليل
         if (sourceContext == "notification") {
-            analyzeText(capturedText, sourceContext, appName)
+            analyzeText(capturedText, sourceContext, appName, childId, parentId)
         } else {
             analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
-            analysisRunnable = Runnable { analyzeText(capturedText, sourceContext, appName) }
+            val sessionChildId = childId
+            val sessionParentId = parentId
+            analysisRunnable = Runnable {
+                analyzeText(capturedText, sourceContext, appName, sessionChildId, sessionParentId)
+            }
             analysisHandler.postDelayed(analysisRunnable!!, 1500)
         }
     }
@@ -114,7 +153,15 @@ class HamiAccessibilityService : AccessibilityService() {
     }
 
     // تم إضافة appName هنا
-    private fun analyzeText(rawText: String, sourceContext: String, appName: String) {
+    private fun analyzeText(
+        rawText: String,
+        sourceContext: String,
+        appName: String,
+        sessionChildId: String = childId,
+        sessionParentId: String = parentId
+    ) {
+        // Ignore delayed callbacks after logout or when switching children.
+        if (!isActiveChildSession() || childId != sessionChildId || parentId != sessionParentId) return
         val allArabicWords = extractArabicWords(rawText)
         if (allArabicWords.isEmpty()) return
 
@@ -141,7 +188,9 @@ class HamiAccessibilityService : AccessibilityService() {
         }
 
         aiAnalyzer.process(textToAnalyze) { label, confidence ->
-            if (label != "Neutral" && confidence > 0.6) {
+            if (!isActiveChildSession() || childId != sessionChildId || parentId != sessionParentId) return@process
+            if (!label.equals("Neutral", ignoreCase = true) &&
+                !label.equals("Normal", ignoreCase = true) && confidence > 0.6) {
 
                 // 1. تعريف الـ severity هنا أول شيء عشان يختفي الخطأ الأحمر
                 val severity = when {
@@ -168,7 +217,9 @@ class HamiAccessibilityService : AccessibilityService() {
 
                 for (word in newWordsList) {
                     aiAnalyzer.process(word) { wordLabel, _ ->
-                        if (wordLabel != "Neutral") {
+                        if (!isActiveChildSession() || childId != sessionChildId || parentId != sessionParentId) return@process
+                        if (!wordLabel.equals("Neutral", ignoreCase = true) &&
+                            !wordLabel.equals("Normal", ignoreCase = true)) {
                             offensiveKeywords.add(word)
                         }
                         wordsChecked++
@@ -204,13 +255,27 @@ class HamiAccessibilityService : AccessibilityService() {
         return text
     }
 
-    // تم إضافة المعامل appName في الدالة
+    // Counts an alert only after the original secure vault successfully accepted it.
+    // The quiz receives just the category, timestamp and child's ID – not message text.
+    private fun isActiveChildSession(): Boolean {
+        val prefs = applicationContext.getSharedPreferences("HamiPrefs", Context.MODE_PRIVATE)
+        return prefs.getBoolean("CHILD_LOGGED_IN", false) &&
+                prefs.getString("USER_ROLE", "") == "CHILD" &&
+                prefs.getString("CHILD_ID", "") == childId &&
+                prefs.getString("PARENT_ID", "") == parentId
+    }
+
     private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String, keywords: List<String>, appName: String) {
+        if (!isActiveChildSession() || childId == "unknown" || parentId == "unknown") return
+        // Firestore alert document ID is the timestamp, so make it unique even if two
+        // detections complete in the same millisecond on the main thread.
+        val timestamp = maxOf(System.currentTimeMillis(), lastAlertTimestamp + 1)
+        lastAlertTimestamp = timestamp
         val vault = HamiSecurityVault(applicationContext)
         val alert = AlertItem(
             text = detectedText,
             riskLabel = type,
-            timestamp = System.currentTimeMillis(),
+            timestamp = timestamp,
             confidence = confidence,
             childId = childId,
             parentId = parentId,
@@ -219,7 +284,19 @@ class HamiAccessibilityService : AccessibilityService() {
             keywords = keywords,
             appName = appName // تم ربط اسم التطبيق
         )
-        vault.saveAlert(alert)
+        try {
+            vault.saveAlert(alert)
+        } catch (e: Exception) {
+            Log.e("HamiSecurity", "Failed to save alert; quiz will not be counted", e)
+            return
+        }
+        QuizTriggerManager.onRiskDetected(
+            service = this,
+            category = type,
+            childId = alert.childId,
+            alertId = timestamp.toString(),
+            timestamp = timestamp
+        )
     }
 
     private fun updateServiceStatus(enabled: Boolean) {
@@ -240,6 +317,11 @@ class HamiAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        analysisRunnable?.let { analysisHandler.removeCallbacks(it) }
+        analysisRunnable = null
+        // A stopped service cannot keep its overlay. The unfinished weekly trigger
+        // remains queued so it can be shown again when the service reconnects.
+        QuizOverlayController.dismissForServiceStop()
         super.onDestroy()
         updateServiceStatus(false)
         Log.d("HamiSecurity", "🧹 Service destroyed and cleaned up")

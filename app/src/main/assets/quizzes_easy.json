@@ -1,0 +1,184 @@
+{
+  "quizzes": [
+    {
+      "id": "easy_offensive_1", "category": "Offensive", "difficulty": "easy",
+      "title": "كلام لطيف", "takeaway": "كلماتنا قد تُفرح أو تُحزن. فلنختر الكلمات اللطيفة.",
+      "questions": [
+        {"id":"easy_offensive_1_q1","question":"صديقك أخطأ في اللعبة. ماذا تقول؟","options":["لا بأس، حاول مرة أخرى","أنت فاشل","لن ألعب معك أبدًا"],"correctAnswerIndex":0,"explanation":"التشجيع يساعد صديقك ولا يجرح مشاعره."},
+        {"id":"easy_offensive_1_q2","question":"هل من اللطيف أن تسخر من صديقك؟","options":["نعم، دائمًا","لا، لأن السخرية تؤلمه","نعم، إذا ضحك الآخرون"],"correctAnswerIndex":1,"explanation":"السخرية قد تحزن صديقك حتى لو ضحك الآخرون."},
+        {"id":"easy_offensive_1_q3","question":"قال لك أحدهم كلمة جميلة. ماذا ترد؟","options":["اسكت","لا أهتم","شكرًا لك"],"correctAnswerIndex":2,"explanation":"كلمة شكر بسيطة تنشر اللطف."}
+      ]
+    },
+    {
+      "id": "easy_offensive_2", "category": "Offensive", "difficulty": "easy",
+      "title": "عندما يزعجني أحد", "takeaway": "إذا أزعجتك رسالة، اطلب المساعدة من شخص بالغ موثوق.",
+      "questions": [
+        {"id":"easy_offensive_2_q1","question":"وصلك كلام يزعجك. ماذا تفعل؟","options":["أخبر شخصًا بالغًا أثق به","أرد بكلام جارح","أرسل الكلام لأصدقائي"],"correctAnswerIndex":0,"explanation":"الشخص البالغ الموثوق يستطيع مساعدتك."},
+        {"id":"easy_offensive_2_q2","question":"شخص يكرر إرسال كلام سيئ لك. ماذا تفعل؟","options":["أرسل له كلامًا أسوأ","أحظره وأخبر شخصًا بالغًا","أعطيه رقمي"],"correctAnswerIndex":1,"explanation":"الحظر وطلب المساعدة يحميانك."},
+        {"id":"easy_offensive_2_q3","question":"من يمكنه مساعدتك إذا خفت من رسالة؟","options":["الشخص الذي يهددني","شخص غريب","أمي أو أبي أو شخص بالغ أثق به"],"correctAnswerIndex":2,"explanation":"اطلب المساعدة من بالغ تثق به عندما تشعر بالخوف."}
+      ]
+    },
+    {
+      "id": "easy_offensive_3", "category": "Offensive", "difficulty": "easy",
+      "title": "لا نشارك السخرية", "takeaway": "لا تنشر صور الآخرين أو كلامًا يجرحهم.",
+      "questions": [
+        {"id":"easy_offensive_3_q1","question":"وصلتك صورة يسخر فيها أحد من طفل. ماذا تفعل؟","options":["لا أنشرها","أرسلها لكل أصدقائي","أضحك عليه"],"correctAnswerIndex":0,"explanation":"عدم نشر الصورة يحمي مشاعر الطفل."},
+        {"id":"easy_offensive_3_q2","question":"هل ترسل سر صديقك إلى المجموعة؟","options":["نعم، للضحك","لا، أحافظ على سره","نعم، إذا غضبت"],"correctAnswerIndex":1,"explanation":"نحترم خصوصية أصدقائنا حتى عندما نختلف."},
+        {"id":"easy_offensive_3_q3","question":"سمعت كلمة جارحة عن زميلك. ماذا تفعل؟","options":["أكررها","أضحك","لا أكررها"],"correctAnswerIndex":2,"explanation":"عدم تكرار الإساءة يساعد على إيقافها."}
+      ]
+    },
+    {
+      "id": "easy_offensive_4", "category": "Offensive", "difficulty": "easy",
+      "title": "أهدأ قبل الرد", "takeaway": "عندما تغضب، خذ نفسًا ثم اختر كلمات محترمة.",
+      "questions": [
+        {"id":"easy_offensive_4_q1","question":"غضبت من صديقك في المحادثة. ما الأفضل؟","options":["أهدأ قبل أن أرد","أكتب له إهانة","أنشر اسمه للسخرية"],"correctAnswerIndex":0,"explanation":"الهدوء يساعدنا على الكلام باحترام."},
+        {"id":"easy_offensive_4_q2","question":"خسرت في لعبة. ماذا تقول لفريقك؟","options":["أنتم سيئون","حاولنا وسنلعب أفضل مرة أخرى","لن أكلمكم"],"correctAnswerIndex":1,"explanation":"الروح الرياضية تعني احترام الآخرين عند الخسارة."},
+        {"id":"easy_offensive_4_q3","question":"كيف نختلف مع أحد بأدب؟","options":["أقول رأيك سخيف","أصرخ عليه","أقول أنا أرى شيئًا مختلفًا"],"correctAnswerIndex":2,"explanation":"يمكن أن نختلف من دون أن نؤذي الآخرين."}
+      ]
+    },
+    {
+      "id": "easy_offensive_5", "category": "Offensive", "difficulty": "easy",
+      "title": "أساعد صديقي", "takeaway": "ساعد من يتعرض للأذى وأخبر بالغًا موثوقًا.",
+      "questions": [
+        {"id":"easy_offensive_5_q1","question":"رأيت طفلًا يبكي بسبب كلام سيئ. ماذا تفعل؟","options":["أواسيه وأخبر بالغًا","أضحك عليه","أترك الآخرين يسخرون منه"],"correctAnswerIndex":0,"explanation":"المواساة وطلب المساعدة تصرفان شجاعان."},
+        {"id":"easy_offensive_5_q2","question":"صديقك تعرض لإهانة في المجموعة. ماذا تقول له؟","options":["أنت تستحق هذا","أنا بجانبك، لنطلب المساعدة","لا تهتم بي"],"correctAnswerIndex":1,"explanation":"الدعم يشعر صديقك أنه ليس وحده."},
+        {"id":"easy_offensive_5_q3","question":"رأيت لاعبين يسبون بعضهم. ماذا تفعل؟","options":["أسب معهم","أنشر الشجار","لا أشارك في السب"],"correctAnswerIndex":2,"explanation":"عدم المشاركة في السب يحافظ على الاحترام."}
+      ]
+    },
+    {
+      "id": "easy_sexism_1", "category": "Sexism", "difficulty": "easy",
+      "title": "الألعاب للجميع", "takeaway": "الألعاب والهوايات ليست حكرًا على الأولاد أو البنات.",
+      "questions": [
+        {"id":"easy_sexism_1_q1","question":"هل تستطيع البنت لعب كرة القدم؟","options":["نعم، إذا كانت تحبها","لا، للأولاد فقط","لا، هذا ممنوع دائمًا"],"correctAnswerIndex":0,"explanation":"يمكن لأي طفل اختيار الرياضة التي يحبها."},
+        {"id":"easy_sexism_1_q2","question":"هل يستطيع الولد تعلم الرسم؟","options":["لا، الرسم للبنات","نعم، إذا كان يحبه","لا، أبدًا"],"correctAnswerIndex":1,"explanation":"الرسم والهوايات تناسب كل من يحبها."},
+        {"id":"easy_sexism_1_q3","question":"قال طفل: هذه اللعبة للأولاد فقط. ما الصحيح؟","options":["أوافقه","أسخر منه","اللعبة لكل من يحبها"],"correctAnswerIndex":2,"explanation":"لا نمنع أحدًا من اللعب لأنه ولد أو بنت."}
+      ]
+    },
+    {
+      "id": "easy_sexism_2", "category": "Sexism", "difficulty": "easy",
+      "title": "الاحترام للجميع", "takeaway": "عامل الأولاد والبنات بنفس الاحترام.",
+      "questions": [
+        {"id":"easy_sexism_2_q1","question":"بنت في مجموعتك لها رأي مختلف. ماذا تفعل؟","options":["أسمع رأيها باحترام","أقول رأيك لا يهم","أمنعها من الكلام"],"correctAnswerIndex":0,"explanation":"كل شخص يستحق أن نسمع له باحترام."},
+        {"id":"easy_sexism_2_q2","question":"ولد حزين ويبكي. ماذا تفعل؟","options":["أسخر منه","أواسيه بلطف","أقول له إن البكاء عيب"],"correctAnswerIndex":1,"explanation":"كل الناس يشعرون بالحزن أحيانًا."},
+        {"id":"easy_sexism_2_q3","question":"هل يستحق الأولاد والبنات الاحترام نفسه؟","options":["لا","بعضهم فقط","نعم"],"correctAnswerIndex":2,"explanation":"كل الأطفال يستحقون الاحترام."}
+      ]
+    },
+    {
+      "id": "easy_sexism_3", "category": "Sexism", "difficulty": "easy",
+      "title": "نشجع بعضنا", "takeaway": "شجع أصدقاءك على تعلم ما يحبونه.",
+      "questions": [
+        {"id":"easy_sexism_3_q1","question":"زميلتك تحب العلوم. ماذا تقول لها؟","options":["رائع، واصلي التعلم","هذا للأولاد فقط","لن تنجحي"],"correctAnswerIndex":0,"explanation":"التشجيع يساعد الجميع على التعلم."},
+        {"id":"easy_sexism_3_q2","question":"زميلك يحب الطبخ. ماذا تقول؟","options":["هذا عيب","جميل، تعلم ما تحب","هذه هواية للبنات فقط"],"correctAnswerIndex":1,"explanation":"الطبخ مهارة يمكن للجميع تعلمها."},
+        {"id":"easy_sexism_3_q3","question":"من يستطيع أن يكون قائدًا للفريق؟","options":["الأولاد فقط","البنات فقط","من يستطيع التعاون والتنظيم"],"correctAnswerIndex":2,"explanation":"نختار القائد بمهارته لا بكونه ولدًا أو بنتًا."}
+      ]
+    },
+    {
+      "id": "easy_sexism_4", "category": "Sexism", "difficulty": "easy",
+      "title": "لا للسخرية", "takeaway": "السخرية من شخص لأنه ولد أو بنت تؤذي مشاعره.",
+      "questions": [
+        {"id":"easy_sexism_4_q1","question":"سخر أحد من بنت في محادثة. ماذا تفعل؟","options":["لا أشارك في السخرية","أضحك معها","أكتب إهانة أخرى"],"correctAnswerIndex":0,"explanation":"عدم المشاركة في السخرية تصرف محترم."},
+        {"id":"easy_sexism_4_q2","question":"وصلتك رسالة تسخر منك لأنك ولد. ماذا تفعل؟","options":["أرد بإهانة","أخبر بالغًا أثق به","أصدق الكلام الجارح"],"correctAnswerIndex":1,"explanation":"الإساءة ليست خطأك، وطلب المساعدة أمر صحيح."},
+        {"id":"easy_sexism_4_q3","question":"هل نضحك على شكل فتاة أو فتى؟","options":["نعم","فقط أمام الأصدقاء","لا"],"correctAnswerIndex":2,"explanation":"لا نسخر من مظهر أي شخص."}
+      ]
+    },
+    {
+      "id": "easy_sexism_5", "category": "Sexism", "difficulty": "easy",
+      "title": "العدل في المجموعة", "takeaway": "أعطِ كل شخص فرصة عادلة للمشاركة.",
+      "questions": [
+        {"id":"easy_sexism_5_q1","question":"بنت تريد الانضمام للعبة. ماذا تفعل؟","options":["أرحب بها إذا كان هناك مكان","أمنعها لأنها بنت","أسخر منها"],"correctAnswerIndex":0,"explanation":"نرحب بالجميع ونعاملهم بعدل."},
+        {"id":"easy_sexism_5_q2","question":"ولد يريد المساعدة في ترتيب الصف. ماذا تقول؟","options":["الترتيب للبنات فقط","شكرًا لمساعدتك","لا تساعدنا"],"correctAnswerIndex":1,"explanation":"التعاون مسؤولية الجميع."},
+        {"id":"easy_sexism_5_q3","question":"من له حق الكلام في المجموعة؟","options":["الأولاد فقط","البنات فقط","الجميع باحترام"],"correctAnswerIndex":2,"explanation":"كل شخص يستحق فرصة للتعبير عن رأيه."}
+      ]
+    },
+    {
+      "id": "easy_religious_1", "category": "Religious Discrimination", "difficulty": "easy",
+      "title": "نحترم معتقدات الآخرين", "takeaway": "احترم معتقدات الآخرين ولا تسخر منها.",
+      "questions": [
+        {"id":"easy_religious_1_q1","question":"زميلك لديه معتقد مختلف. ماذا تفعل؟","options":["أعامله بلطف","أسخر منه","أمنعه من اللعب"],"correctAnswerIndex":0,"explanation":"نحترم الجميع حتى لو اختلفنا."},
+        {"id":"easy_religious_1_q2","question":"هل من اللطيف السخرية من عبادة شخص؟","options":["نعم","لا","إذا كان يمزح فقط"],"correctAnswerIndex":1,"explanation":"السخرية من عبادات الآخرين قد تؤذيهم."},
+        {"id":"easy_religious_1_q3","question":"كيف نتعامل مع شخص يختلف عنا في الدين؟","options":["نضحك عليه","نبتعد عنه دائمًا","باحترام"],"correctAnswerIndex":2,"explanation":"الاحترام مطلوب مع جميع الناس."}
+      ]
+    },
+    {
+      "id": "easy_religious_2", "category": "Religious Discrimination", "difficulty": "easy",
+      "title": "الكلام الطيب", "takeaway": "اختر كلمات محترمة عند الحديث عن الأديان.",
+      "questions": [
+        {"id":"easy_religious_2_q1","question":"رأيت تعليقًا يستهزئ بدين شخص. ماذا تفعل؟","options":["لا أكرره ولا أنشره","أرسله للأصدقاء","أضحك عليه"],"correctAnswerIndex":0,"explanation":"عدم نشر الإهانة يمنع إيذاء الآخرين."},
+        {"id":"easy_religious_2_q2","question":"صديقك يخبرك عن مناسبة دينية. كيف تستمع؟","options":["أسخر","باهتمام وأدب","أقاطعه بإهانة"],"correctAnswerIndex":1,"explanation":"الاستماع بأدب يدل على الاحترام."},
+        {"id":"easy_religious_2_q3","question":"ماذا تقول إذا لم تفهم عادة دينية؟","options":["هذه عادة سخيفة","لن أسمع","هل تشرحها لي من فضلك؟"],"correctAnswerIndex":2,"explanation":"السؤال المهذب يساعدنا على الفهم."}
+      ]
+    },
+    {
+      "id": "easy_religious_3", "category": "Religious Discrimination", "difficulty": "easy",
+      "title": "لا ننشر الإهانة", "takeaway": "إذا وجدت كلامًا يجرح معتقدات الآخرين فلا تشاركه.",
+      "questions": [
+        {"id":"easy_religious_3_q1","question":"وصلتك صورة تجرح معتقد شخص. ما الأفضل؟","options":["لا أرسلها لأحد","أرسلها للمجموعة","أعلق عليها بسخرية"],"correctAnswerIndex":0,"explanation":"عدم إرسال الصورة يمنع انتشار الإساءة."},
+        {"id":"easy_religious_3_q2","question":"أهان أحد معتقدك في لعبة. ماذا تفعل؟","options":["أهينه أيضًا","أخبر بالغًا أثق به","أرسل كلامًا مؤذيًا"],"correctAnswerIndex":1,"explanation":"طلب المساعدة أفضل من الرد بإهانة."},
+        {"id":"easy_religious_3_q3","question":"هل نعيد نشر رسالة تكره أصحاب دين؟","options":["نعم","إذا طلب صديق ذلك","لا"],"correctAnswerIndex":2,"explanation":"نرفض الكلام الذي ينشر الكراهية."}
+      ]
+    },
+    {
+      "id": "easy_religious_4", "category": "Religious Discrimination", "difficulty": "easy",
+      "title": "أصدقاء رغم الاختلاف", "takeaway": "يمكن أن نكون أصدقاء ونختلف في المعتقد.",
+      "questions": [
+        {"id":"easy_religious_4_q1","question":"زميل يختلف عنك في الدين يريد اللعب. ماذا تفعل؟","options":["ألعب معه باحترام","أطرده","أسخر منه"],"correctAnswerIndex":0,"explanation":"الاختلاف لا يمنع اللعب والتعاون."},
+        {"id":"easy_religious_4_q2","question":"هل يجوز إحراج زميل بسبب دينه؟","options":["نعم","لا","إذا ضحك أصدقاؤنا"],"correctAnswerIndex":1,"explanation":"إحراج الآخرين بسبب معتقدهم غير محترم."},
+        {"id":"easy_religious_4_q3","question":"كيف نتحدث مع من يختلف عنا؟","options":["بإهانات","بصراخ","بأدب"],"correctAnswerIndex":2,"explanation":"الاختلاف يمكن أن يكون هادئًا ومحترمًا."}
+      ]
+    },
+    {
+      "id": "easy_religious_5", "category": "Religious Discrimination", "difficulty": "easy",
+      "title": "نطلب المساعدة", "takeaway": "إذا أزعجك كلام عن دينك، تحدث مع بالغ موثوق.",
+      "questions": [
+        {"id":"easy_religious_5_q1","question":"طفل يتعرض لسخرية بسبب دينه. ماذا تفعل؟","options":["أواسيه وأخبر بالغًا","أضحك عليه","أكرر الكلام"],"correctAnswerIndex":0,"explanation":"الدعم وطلب المساعدة يحميان الطفل."},
+        {"id":"easy_religious_5_q2","question":"من يساعدك عندما يجرحك تعليق ديني؟","options":["صاحب التعليق المؤذي","أحد والديّ أو بالغ موثوق","شخص غريب"],"correctAnswerIndex":1,"explanation":"يمكن لشخص بالغ موثوق مساعدتك بأمان."},
+        {"id":"easy_religious_5_q3","question":"هل تصمت إذا كرر أحد إهانتك؟","options":["نعم، دائمًا","أرد بإهانة","لا، أطلب المساعدة"],"correctAnswerIndex":2,"explanation":"لا يجب أن تواجه الإساءة وحدك."}
+      ]
+    },
+    {
+      "id": "easy_racism_1", "category": "Racism", "difficulty": "easy",
+      "title": "نحترم الألوان", "takeaway": "كل الناس يستحقون الاحترام مهما كان لون بشرتهم.",
+      "questions": [
+        {"id":"easy_racism_1_q1","question":"هل نسخر من لون بشرة أحد؟","options":["لا","نعم","إذا ضحك الآخرون"],"correctAnswerIndex":0,"explanation":"لون البشرة لا يجعل أحدًا أقل قيمة."},
+        {"id":"easy_racism_1_q2","question":"رأيت طفلًا يُسخر من لونه. ماذا تفعل؟","options":["أضحك","أقف معه وأخبر بالغًا","أكرر الكلام"],"correctAnswerIndex":1,"explanation":"الوقوف مع الطفل وطلب المساعدة تصرف صحيح."},
+        {"id":"easy_racism_1_q3","question":"هل يستحق كل طفل الاحترام؟","options":["بعض الأطفال فقط","لا","نعم"],"correctAnswerIndex":2,"explanation":"كل الأطفال يستحقون الاحترام."}
+      ]
+    },
+    {
+      "id": "easy_racism_2", "category": "Racism", "difficulty": "easy",
+      "title": "أسماء جميلة", "takeaway": "احترم أسماء الآخرين ولغاتهم ولهجاتهم.",
+      "questions": [
+        {"id":"easy_racism_2_q1","question":"اسم زميلك جديد عليك. ماذا تفعل؟","options":["أسأله كيف أنطقه بشكل صحيح","أسخر من اسمه","أختار له اسمًا يزعجه"],"correctAnswerIndex":0,"explanation":"نطق الاسم باحترام يفرح صاحبه."},
+        {"id":"easy_racism_2_q2","question":"زميلك يتكلم بلهجة مختلفة. ماذا تفعل؟","options":["أقلد كلامه للسخرية","أستمع إليه باحترام","أمنعه من الكلام"],"correctAnswerIndex":1,"explanation":"اختلاف اللهجات شيء طبيعي."},
+        {"id":"easy_racism_2_q3","question":"هل من اللطيف الضحك على اسم شخص؟","options":["نعم","إذا كنت أمزح","لا"],"correctAnswerIndex":2,"explanation":"لا نسخر من أسماء الآخرين."}
+      ]
+    },
+    {
+      "id": "easy_racism_3", "category": "Racism", "difficulty": "easy",
+      "title": "أصدقاء من كل مكان", "takeaway": "يمكن أن نصادق أطفالًا من بلدان مختلفة.",
+      "questions": [
+        {"id":"easy_racism_3_q1","question":"طفل من بلد آخر يريد اللعب. ماذا تفعل؟","options":["أرحب به","أمنعه بسبب بلده","أسخر من بلده"],"correctAnswerIndex":0,"explanation":"البلد لا يحدد قيمة الشخص."},
+        {"id":"easy_racism_3_q2","question":"هل نرفض طفلًا لأنه من بلد مختلف؟","options":["نعم","لا","أحيانًا للضحك"],"correctAnswerIndex":1,"explanation":"نعامل الأطفال بعدل مهما كانت بلدانهم."},
+        {"id":"easy_racism_3_q3","question":"كيف نتعرف إلى زميل من بلد جديد؟","options":["نسخر من كلامه","نتجاهله","نسأله بلطف عن اسمه وهواياته"],"correctAnswerIndex":2,"explanation":"السؤال بلطف يساعدنا على تكوين صداقات."}
+      ]
+    },
+    {
+      "id": "easy_racism_4", "category": "Racism", "difficulty": "easy",
+      "title": "لا ننشر الكلام العنصري", "takeaway": "لا تكرر أو تنشر كلامًا يسيء إلى لون شخص أو أصله.",
+      "questions": [
+        {"id":"easy_racism_4_q1","question":"وصلتك رسالة تسخر من بلد شخص. ماذا تفعل؟","options":["لا أعيد إرسالها","أرسلها للجميع","أضحك وأعلق"],"correctAnswerIndex":0,"explanation":"عدم النشر يوقف انتشار السخرية."},
+        {"id":"easy_racism_4_q2","question":"لاعب يكرر كلامًا عنصريًا. ماذا تفعل؟","options":["أكرر كلامه","أكتم صوته أو أبلغ عنه","أشجعه"],"correctAnswerIndex":1,"explanation":"الكتم والإبلاغ يساعدان على حماية اللاعبين."},
+        {"id":"easy_racism_4_q3","question":"هل النكتة التي تسخر من لون شخص لطيفة؟","options":["نعم","إذا كانت قصيرة","لا"],"correctAnswerIndex":2,"explanation":"السخرية من اللون قد تؤذي الناس."}
+      ]
+    },
+    {
+      "id": "easy_racism_5", "category": "Racism", "difficulty": "easy",
+      "title": "العدل والتعاون", "takeaway": "اختر أصدقاءك وزملاءك بأخلاقهم لا بألوانهم أو أصولهم.",
+      "questions": [
+        {"id":"easy_racism_5_q1","question":"من تختار لفريقك؟","options":["من يحب التعاون مهما كان أصله","من له نفس لون بشرتي فقط","من يسخر من الآخرين"],"correctAnswerIndex":0,"explanation":"التعاون أهم من اللون أو الأصل."},
+        {"id":"easy_racism_5_q2","question":"زميل له لون مختلف عن لونك. كيف تعامله؟","options":["أتجاهله دائمًا","بلطف وعدل","أمنعه من اللعب"],"correctAnswerIndex":1,"explanation":"الكل يستحق المعاملة العادلة."},
+        {"id":"easy_racism_5_q3","question":"تعرّض صديقك لإهانة بسبب أصله. ماذا تفعل؟","options":["أضحك","أشارك في الإهانة","أدعمه وأخبر بالغًا موثوقًا"],"correctAnswerIndex":2,"explanation":"طلب المساعدة ودعم الصديق تصرفان آمنان."}
+      ]
+    }
+  ]
+}

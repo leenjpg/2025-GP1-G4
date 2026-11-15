@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import com.example.Hami.quiz.ui.QuizProgressSection
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
@@ -1054,6 +1055,15 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
         weeks[selectedWeekIndex]
     } else null
 
+    // Same Monday-based ISO week key used when Hami saves quizProgress in Firestore.
+    // Example: week 46 of 2026 -> "2026-11-09".
+    val selectedQuizWeekStart = currentWeek?.let { week ->
+        java.time.LocalDate.of(week.year, 1, 4)
+            .with(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear(), week.weekNumber.toLong())
+            .with(java.time.DayOfWeek.MONDAY)
+            .toString()
+    }
+
     val weekAlerts = currentWeek?.let { week ->
         allAlerts.filter { alert ->
             val date = Date(alert.timestamp)
@@ -1134,6 +1144,16 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                         }
                     }
                 }
+            }
+        }
+
+        // Quiz status follows the same week chosen in the card above.
+        if (selectedQuizWeekStart != null && currentWeek != null) {
+            item(key = "quiz_progress") {
+                QuizProgressSection(
+                    selectedWeekStart = selectedQuizWeekStart,
+                    selectedWeekLabel = currentWeek.displayName
+                )
             }
         }
 
@@ -1256,16 +1276,20 @@ fun getAvailableWeeks(alerts: List<AlertItem>): List<WeekData> {
     return weekMap.values.sortedByDescending { it.year * 100 + it.weekNumber }
 }
 
+// ISO calendar weeks begin on Monday, just like the quiz alert counter.
+// Week-based year also handles dates close to New Year's correctly.
 fun getWeekNumber(date: Date): Int {
-    val calendar = Calendar.getInstance()
-    calendar.time = date
-    return calendar.get(Calendar.WEEK_OF_YEAR)
+    val localDate = date.toInstant()
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalDate()
+    return localDate.get(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear())
 }
 
 fun getYear(date: Date): Int {
-    val calendar = Calendar.getInstance()
-    calendar.time = date
-    return calendar.get(Calendar.YEAR)
+    val localDate = date.toInstant()
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalDate()
+    return localDate.get(java.time.temporal.WeekFields.ISO.weekBasedYear())
 }
 
 data class WeekData(val weekNumber: Int, val year: Int, val displayName: String, val displayNameShort: String)
