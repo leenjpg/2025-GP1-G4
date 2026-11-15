@@ -103,8 +103,10 @@ class HamiSecurityVault(context: Context) {
                         read = obj.optBoolean("read", false),
                         actionTaken = obj.optString("actionTaken", null),
                         context = obj.optString("context", "keyboard_input"),
-                        keywords = keywordsList // إضافة الكلمات هنا
-                    )
+                        keywords = keywordsList, // إضافة الكلمات هنا
+                        appName = obj.optString("appName", "غير معروف"),
+                        detectedWord = obj.optString("detectedWord", "")
+                )
                 )
             }
         }
@@ -136,6 +138,11 @@ class HamiSecurityVault(context: Context) {
             put("parentId", alert.parentId)
             put("confidence", alert.confidence)
             put("keywords", JSONArray(alert.keywords)) // حفظ الكلمات المفتاحية محلياً
+            put("detectedWord", alert.detectedWord)
+            put("appName", alert.appName)
+            put("context", alert.context)
+            put("read", alert.read)
+            put("actionTaken", alert.actionTaken)
         }
 
         syncAlertToFirebase(alert)
@@ -168,8 +175,8 @@ class HamiSecurityVault(context: Context) {
                 "context" to alert.context,
                 "read" to alert.read,
                 "actionTaken" to alert.actionTaken,
-
-                )
+                "detectedWord" to alert.detectedWord
+            )
 
             db.collection("alert")
                 .document(alert.timestamp.toString())

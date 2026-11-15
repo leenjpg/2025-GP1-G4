@@ -70,6 +70,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.example.Hami.quiz.ui.QuizProgressSection
+import androidx.compose.material.icons.filled.Delete
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
@@ -152,7 +153,7 @@ class DashboardActivity : ComponentActivity() {
         android.util.Log.d("Dashboard", "Current user: ${currentUser?.uid}")
 
         setContent {
-            //  (RTL)
+            // (RTL)
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 val unreadAlertsList = remember { mutableStateListOf<AlertItem>() }
                 val allAlertsList = remember { mutableStateListOf<AlertItem>() }
@@ -183,6 +184,22 @@ class DashboardActivity : ComponentActivity() {
                             .addOnFailureListener {
                                 unreadAlertsList.add(alert)
                             }
+                    },
+                    onMarkAsSafe = { alert ->
+                        val word = alert.detectedWord.ifBlank { alert.text }
+                        SafeWordsRepository.addSafeWord(
+                            parentId = alert.parentId,
+                            originalWord = word,
+                            alertId = alert.documentId
+                        ) { success ->
+                            if (success) {
+                                // Mark the source alert read so it leaves the unread list
+                                unreadAlertsList.removeAll { it.documentId == alert.documentId }
+                                FirebaseFirestore.getInstance()
+                                    .collection("alert").document(alert.documentId)
+                                    .update("read", true, "actionTaken", "safe_word")
+                            }
+                        }
                     },
                     onRefresh = {
                         isLoading = true
@@ -259,7 +276,8 @@ class DashboardActivity : ComponentActivity() {
                                     parentId = parentId,
                                     read = isRead,
                                     context = document.getString("context") ?: "unknown",
-                                    documentId = document.id
+                                    documentId = document.id,
+                                    detectedWord = document.getString("detectedWord") ?: ""
                                 )
                                 allAlerts.add(alert)
                                 if (!isRead) unreadAlerts.add(alert)
@@ -293,6 +311,7 @@ fun DashboardScreen(
     isLoading: Boolean,
     errorMessage: String?,
     onMarkAsRead: (AlertItem) -> Unit,
+    onMarkAsSafe: (AlertItem) -> Unit,
     onRefresh: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -393,7 +412,7 @@ fun DashboardScreen(
                                 showFilter = showRecommendationFilter,
                                 onDismissFilter = { showRecommendationFilter = false }
                             )
-                            NavItem.Alerts -> AlertsTabContent(unreadAlerts, onMarkAsRead)
+                            NavItem.Alerts -> AlertsTabContent(unreadAlerts, onMarkAsRead, onMarkAsSafe)
                             NavItem.Report -> ReportTabContent(allAlerts)
                             NavItem.Settings -> SettingsTab(onLogout)
                         }
@@ -781,7 +800,8 @@ fun RiskyAppRow(app: RiskyApp) {
 @Composable
 fun AlertsTabContent(
     alerts: List<AlertItem>,
-    onMarkAsRead: (AlertItem) -> Unit
+    onMarkAsRead: (AlertItem) -> Unit,
+    onMarkAsSafe: (AlertItem) -> Unit
 ) {
     val hamiTeal = Color(0xFF52879C)
     val backgroundGradient = Brush.linearGradient(
@@ -839,7 +859,8 @@ fun AlertsTabContent(
                 items(childAlerts, key = { it.documentId }) { alert ->
                     SwipeToMarkReadCard(
                         alert = alert,
-                        onMarkAsRead = { onMarkAsRead(alert) }
+                        onMarkAsRead = { onMarkAsRead(alert) },
+                        onMarkAsSafe = { onMarkAsSafe(alert) }
                     )
                 }
             }
@@ -891,7 +912,7 @@ fun ChildHeaderBlock(childName: String, count: Int, color: Color) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SwipeToMarkReadCard(alert: AlertItem, onMarkAsRead: () -> Unit) {
+fun SwipeToMarkReadCard(alert: AlertItem, onMarkAsRead: () -> Unit, onMarkAsSafe: () -> Unit ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
@@ -919,13 +940,13 @@ fun SwipeToMarkReadCard(alert: AlertItem, onMarkAsRead: () -> Unit) {
         },
         enableDismissFromStartToEnd = false,
         content = {
-            AlertCard(alert = alert)
+            AlertCard(alert = alert, onMarkAsSafe = onMarkAsSafe)
         }
     )
 }
 
 @Composable
-fun AlertCard(alert: AlertItem) {
+fun AlertCard(alert: AlertItem, onMarkAsSafe: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val sharedPref = remember {
         context.getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
@@ -937,6 +958,9 @@ fun AlertCard(alert: AlertItem) {
     val sdf = remember { SimpleDateFormat("yyyy/MM/dd HH:mm", Locale("ar")) }
     val riskColor = threatColors[alert.riskLabel] ?: Color(0xFF64B5F6)
     val displayName = threatDisplayNames[alert.riskLabel] ?: alert.riskLabel
+
+    // Tracks the "already added to safe list" confirmation state for this card
+    var safeConfirmed by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -997,10 +1021,13 @@ fun AlertCard(alert: AlertItem) {
 
             // ===== Body: alert text (hidden by default) =====
             if (showAlertText) {
+                // just show the specific bad word
                 Text(
                     text = alert.text,
                     fontSize = 14.sp,
-                    fontFamily = AlfontDark
+                    fontFamily = AlfontDark,
+                    color = Color.DarkGray,
+                    fontWeight = FontWeight.Bold
                 )
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1011,6 +1038,58 @@ fun AlertCard(alert: AlertItem) {
                         fontSize = 13.sp,
                         fontFamily = AlfontDark,
                         color = Color.Gray
+                    )
+                }
+            }
+
+            // ===== "This word is not harmful" action — only when text is visible =====
+            if (showAlertText && alert.detectedWord.isNotBlank() && !safeConfirmed) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        safeConfirmed = true
+                        onMarkAsSafe()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Shield,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "هذه الكلمة غير ضارة",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontFamily = AlfontDark
+                        )
+                    }
+                }
+            }
+
+            // ===== Confirmation state after tapping =====
+            if (safeConfirmed) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "تمت الإضافة للقائمة الآمنة",
+                        color = Color(0xFF4CAF50),
+                        fontSize = 12.sp,
+                        fontFamily = AlfontDark
                     )
                 }
             }
@@ -1300,6 +1379,7 @@ fun SettingsTab(onLogout: () -> Unit) {
     val sharedPref = remember {
         context.getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
     }
+    val parentId = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
 
     // Default is FALSE (don't show text)
     var showAlertText by remember {
@@ -1313,10 +1393,12 @@ fun SettingsTab(onLogout: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundGradient)
-            .padding(16.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
@@ -1325,7 +1407,7 @@ fun SettingsTab(onLogout: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Privacy Settings Card
+            // ===== Privacy Settings Card =====
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -1369,14 +1451,22 @@ fun SettingsTab(onLogout: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ===== Safe Words Management =====
+            SafeWordsSettingsSection(parentId = parentId, hamiTeal = hamiTeal)
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Logout button
             Button(
                 onClick = onLogout,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(56.dp).shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp))
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp))
             ) {
                 Text("تسجيل الخروج", fontFamily = AlfontDark, color = Color.White, fontSize = 18.sp)
             }
@@ -1385,7 +1475,188 @@ fun SettingsTab(onLogout: () -> Unit) {
         }
     }
 }
+@Composable
+fun SafeWordsSettingsSection(parentId: String, hamiTeal: Color) {
+    // Current list of (normalized, original) pairs
+    var entries by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var newWord by remember { mutableStateOf("") }
+    var isAdding by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Load on entry
+    LaunchedEffect(parentId) {
+        if (parentId.isBlank()) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+        SafeWordsRepository.getSafeWordEntries(parentId) { list ->
+            entries = list.sortedBy { it.second }
+            isLoading = false
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Shield,
+                    contentDescription = null,
+                    tint = hamiTeal,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "الكلمات الآمنة",
+                    fontSize = 18.sp,
+                    fontFamily = AlfontDark,
+                    color = hamiTeal
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "الكلمات التي تضيفها هنا لن تُرسل عنها تنبيهات لجميع أطفالك",
+                fontSize = 12.sp,
+                fontFamily = AlfontDark,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Add row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = newWord,
+                    onValueChange = { newWord = it; errorMessage = null },
+                    label = {
+                        Text("أضف كلمة آمنة", fontFamily = AlfontDark, fontSize = 12.sp)
+                    },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    enabled = !isAdding,
+                    textStyle = LocalTextStyle.current.copy(
+                        fontFamily = AlfontDark,
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Content
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        val trimmed = newWord.trim()
+                        if (trimmed.isBlank()) {
+                            errorMessage = "اكتب كلمة أولاً"
+                            return@Button
+                        }
+                        isAdding = true
+                        SafeWordsRepository.addSafeWord(
+                            parentId = parentId,
+                            originalWord = trimmed,
+                            alertId = "manual_add"
+                        ) { success ->
+                            isAdding = false
+                            if (success) {
+                                val normalized = SafeWordsRepository.normalizeWord(trimmed)
+                                // Replace existing entry if it's already there, else append
+                                entries = (entries.filterNot { it.first == normalized } +
+                                        (normalized to trimmed)).sortedBy { it.second }
+                                newWord = ""
+                                errorMessage = null
+                            } else {
+                                errorMessage = "تعذر إضافة الكلمة"
+                            }
+                        }
+                    },
+                    enabled = !isAdding && parentId.isNotBlank(),
+                    modifier = Modifier.height(56.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) {
+                    if (isAdding) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("إضافة", color = Color.White, fontSize = 14.sp, fontFamily = AlfontDark)
+                    }
+                }
+            }
+
+            errorMessage?.let {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(it, color = Color.Red, fontSize = 12.sp, fontFamily = AlfontDark)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(color = Color(0xFFE0E0E0))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // List
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = hamiTeal, modifier = Modifier.size(24.dp))
+                    }
+                }
+                entries.isEmpty() -> {
+                    Text(
+                        "لا توجد كلمات آمنة بعد",
+                        fontSize = 13.sp,
+                        fontFamily = AlfontDark,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                else -> {
+                    entries.forEach { (normalized, original) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                original,
+                                fontSize = 15.sp,
+                                fontFamily = AlfontDark,
+                                color = Color.DarkGray,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = {
+                                    SafeWordsRepository.removeSafeWord(parentId, normalized) { success ->
+                                        if (success) {
+                                            entries = entries.filterNot { it.first == normalized }
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Filled.Cancel,
+                                    contentDescription = "حذف",
+                                    tint = Color(0xFFD32F2F)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 // App safety data comes from the two independent Firestore collections.
 private data class HamiRisk(val enabled: Boolean = false, val description: String = "")
 private data class HamiApp(

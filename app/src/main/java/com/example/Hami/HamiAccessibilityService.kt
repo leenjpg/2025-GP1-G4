@@ -23,6 +23,12 @@ class HamiAccessibilityService : AccessibilityService() {
 
     // (لمنع التكرار الذكي)
     private val alertedWordsPool = mutableMapOf<String, Long>()
+
+    // cached safe words for this parent (loaded on connect + refreshed periodically)
+    private val safeWordsCache = mutableSetOf<String>()
+    private var safeWordsLastLoadedAt = 0L
+    private val SAFE_WORDS_REFRESH_MS = 5 * 60 * 1000L   // refresh every 5 min
+
     // تم إصلاح علامات الضرب هنا
     private val ONE_DAY_MS = 24 * 60 * 60 * 1000L
 
@@ -38,6 +44,9 @@ class HamiAccessibilityService : AccessibilityService() {
         childId = sharedPref.getString("CHILD_ID", "unknown") ?: "unknown"
         parentId = sharedPref.getString("PARENT_ID", "unknown") ?: "unknown"
 
+        // load the parent's safe list immediately
+        refreshSafeWordsIfNeeded(force = true)
+
         updateServiceStatus(true)
         // Only resume a quiz on an authenticated child's device.
         if (sharedPref.getBoolean("CHILD_LOGGED_IN", false) &&
@@ -46,6 +55,48 @@ class HamiAccessibilityService : AccessibilityService() {
             QuizTriggerManager.onServiceStarted(this, childId)
         }
         Log.d("HamiSecurity", "✅ Service connected - Child: $childId, Parent: $parentId")
+    }
+
+    /*
+   Loads the parent's per-account safe word list from Firestore.
+   Called on connect and lazily on each detection (throttled to SAFE_WORDS_REFRESH_MS).
+   The list is cached in memory so detection stays fast and offline-tolerant.
+  */
+    private fun refreshSafeWordsIfNeeded(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - safeWordsLastLoadedAt < SAFE_WORDS_REFRESH_MS) return
+        if (parentId == "unknown" || parentId.isBlank()) return
+
+        safeWordsLastLoadedAt = now
+        SafeWordsRepository.getSafeWords(parentId) { set ->
+            if (!isActiveChildSession()) return@getSafeWords
+            safeWordsCache.clear()
+            safeWordsCache.addAll(set)
+            Log.d("HamiSecurity", "🛡️ Safe word cache loaded: ${safeWordsCache.size} words")
+        }
+    }
+
+    /*
+       Returns true if the given raw word is on the parent's safe list.
+       Uses the same normalization as SafeWordsRepository.
+     */
+    private fun isWordSafe(word: String): Boolean {
+        if (safeWordsCache.isEmpty()) return false
+        return safeWordsCache.contains(SafeWordsRepository.normalizeWord(word))
+    }
+
+    /*
+       Picks the single word that represents the alert for the safe-list flow.
+       - If the model narrowed it down to one offensive keyword, use that.
+       - Otherwise prefer the first offensive keyword.
+       - Fallback: the first non-stopword Arabic token from the message.
+     */
+    private fun pickSafeCandidate(
+        keywords: List<String>,
+        newWordsList: List<String>
+    ): String {
+        keywords.firstOrNull { it.isNotBlank() }?.let { return it }
+        return newWordsList.firstOrNull { it.isNotBlank() } ?: ""
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -162,6 +213,7 @@ class HamiAccessibilityService : AccessibilityService() {
     ) {
         // Ignore delayed callbacks after logout or when switching children.
         if (!isActiveChildSession() || childId != sessionChildId || parentId != sessionParentId) return
+        refreshSafeWordsIfNeeded()
         val allArabicWords = extractArabicWords(rawText)
         if (allArabicWords.isEmpty()) return
 
@@ -211,7 +263,22 @@ class HamiAccessibilityService : AccessibilityService() {
                 var wordsChecked = 0
 
                 if (newWordsList.size == 1) {
-                    saveAlertToFirestore(rawText, label, severity, confidence, sourceContext, newWordsList, appName)
+                    val candidate = newWordsList.first()
+                    if (isWordSafe(candidate)) {
+                        Log.d("HamiSecurity", "⏭️ Skipped — '$candidate' is on parent's safe list")
+                        return@process
+                    }
+                    // Send the specific word instead of the whole rawText
+                    saveAlertToFirestore(
+                        detectedText = candidate,
+                        type = label,
+                        severity = severity,
+                        confidence = confidence,
+                        sourceContext = sourceContext,
+                        keywords = newWordsList,
+                        appName = appName,
+                        detectedWord = candidate
+                    )
                     return@process
                 }
 
@@ -226,12 +293,24 @@ class HamiAccessibilityService : AccessibilityService() {
 
                         // 4. الحفظ النهائي بعد فحص كل الكلمات
                         if (wordsChecked == newWordsList.size) {
-                            // كحل احتياطي: لو المودل ما لقط الشتيمة المفردة، نرسل قائمة فارغة للداشبورد عشان ما تتلوث الاحصائية
                             val finalKeywords = if (offensiveKeywords.isNotEmpty()) offensiveKeywords else emptyList()
+                            val candidate = pickSafeCandidate(finalKeywords, newWordsList)
 
+                            if (candidate.isNotBlank() && isWordSafe(candidate)) {
+                                Log.d("HamiSecurity", "⏭️ Skipped — '$candidate' is on parent's safe list")
+                                return@process
+                            }
+
+                            // Send the specific candidate word instead of the whole rawText
                             saveAlertToFirestore(
-                                rawText, label, severity, confidence,
-                                sourceContext, finalKeywords, appName
+                                detectedText = candidate,
+                                type = label,
+                                severity = severity,
+                                confidence = confidence,
+                                sourceContext = sourceContext,
+                                keywords = finalKeywords,
+                                appName = appName,
+                                detectedWord = candidate
                             )
                         }
                     }
@@ -265,7 +344,7 @@ class HamiAccessibilityService : AccessibilityService() {
                 prefs.getString("PARENT_ID", "") == parentId
     }
 
-    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String, keywords: List<String>, appName: String) {
+    private fun saveAlertToFirestore(detectedText: String, type: String, severity: String, confidence: Float, sourceContext: String, keywords: List<String>, appName: String, detectedWord: String) {
         if (!isActiveChildSession() || childId == "unknown" || parentId == "unknown") return
         // Firestore alert document ID is the timestamp, so make it unique even if two
         // detections complete in the same millisecond on the main thread.
@@ -282,7 +361,8 @@ class HamiAccessibilityService : AccessibilityService() {
             read = false,
             context = sourceContext,
             keywords = keywords,
-            appName = appName // تم ربط اسم التطبيق
+            appName = appName, // تم ربط اسم التطبيق
+            detectedWord = detectedWord
         )
         try {
             vault.saveAlert(alert)
