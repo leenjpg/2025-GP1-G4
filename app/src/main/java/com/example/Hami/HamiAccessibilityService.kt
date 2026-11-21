@@ -233,18 +233,19 @@ class HamiAccessibilityService : AccessibilityService() {
 
 
                 if (newWordsList.size == 1) {
-                    val singleWord = newWordsList.first()
-                    if (isWordSafe(singleWord)) return@process
-
+                    val candidate = newWordsList.first()
+                    if (isWordSafe(candidate)) {
+                        return@process
+                    }
                     saveAlertToFirestore(
-                        detectedText = rawText,
+                        detectedText = candidate,
                         type = label,
                         severity = severity,
                         confidence = confidence,
                         sourceContext = sourceContext,
                         keywords = newWordsList,
                         appName = appName,
-                        detectedWord = singleWord
+                        detectedWord = candidate
                     )
                     return@process
                 }
@@ -264,10 +265,11 @@ class HamiAccessibilityService : AccessibilityService() {
                             val finalKeywords = if (offensiveKeywords.isNotEmpty()) offensiveKeywords else emptyList()
                             val candidate = pickSafeCandidate(finalKeywords, newWordsList)
 
-                            if (candidate.isNotBlank() && isWordSafe(candidate)) return@process
-
+                            if (candidate.isNotBlank() && isWordSafe(candidate)) {
+                                return@process
+                            }
                             saveAlertToFirestore(
-                                detectedText = rawText,
+                                detectedText = candidate,
                                 type = label,
                                 severity = severity,
                                 confidence = confidence,
