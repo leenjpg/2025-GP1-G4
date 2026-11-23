@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
@@ -137,11 +138,101 @@ class ChildStatusActivity : ComponentActivity() {
 
 @Composable
 fun ChildSetupScreen(isServiceEnabled: Boolean, onEnableClick: () -> Unit, onLogout: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showLogoutDialog by remember { mutableStateOf(false)}
+    var logoutPassword by remember { mutableStateOf("")}
+    var logoutError by remember { mutableStateOf<String?>(null)}
+    var isCheckingPassword by remember { mutableStateOf(false)}
     val backgroundGradient = Brush.linearGradient(
         colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF))
     )
     val hamiTeal = Color(0xFF52879C)
+// ask for parent password before logging out on child device
+    if (showLogoutDialog){
+        AlertDialog(
+            onDismissRequest = { if (!isCheckingPassword) showLogoutDialog = false},
+            title = { Text("تأكيد تسجيل الخروج", fontFamily = AlfontDark, color = hamiTeal, fontSize = 20.sp)},
+            text = {
+                Column{
+                    Text(
+                        "أدخل كلمة مرور ولي الأمر لتسجيل الخروج من هذا الجهاز",
+                        fontFamily = AlfontDark,
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = logoutPassword,
+                        onValueChange = {logoutPassword = it; logoutError = null},
+                        label = {Text("كلمة المرور", fontFamily = AlfontDark)},
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password
+                        ),
+                        singleLine = true,
+                        enabled = !isCheckingPassword,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    logoutError?.let {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(it, color = Color.Red, fontSize = 12.sp, fontFamily = AlfontDark)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isCheckingPassword,
+                    onClick = {
+                        if(logoutPassword.isBlank()){
+                            logoutError = "يرجى إدخال كلمة المرور"
+                            return@TextButton
+                        }
+                        val parentEmail = context
+                            .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+                            .getString("PARENT_EMAIL", "") ?: ""
+                        isCheckingPassword = true
+                        AuthManager().loginParent(parentEmail, logoutPassword){success, error ->
+                            isCheckingPassword = false
+                            if(success){ //for the firebase enabled update after logout for correct deletion of children
+                               val childId = context
+                                   .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+                                   .getString("CHILD_ID", "") ?: ""
+                                if (childId.isNotEmpty()){
+                                    isCheckingPassword = true
+                                    FirebaseFirestore.getInstance().collection("child").document(childId)
+                                        .update("accessibilityServiceEnabled", false)
+                                        .addOnCompleteListener {
+                                            isCheckingPassword = false
+                                            showLogoutDialog = false
+                                            onLogout()
+                                        }
+                                } else{
+                                    showLogoutDialog = false
+                                    onLogout()
+                                }
+                            } else {
+                                logoutError = "كلمة المرور غير صحيحة"
+                            }
+                        }
+                    }
+                ) {
+                    if (isCheckingPassword){
+                        CircularProgressIndicator(color = hamiTeal, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
 
+                    } else{
+                        Text("تأكيد", fontFamily = AlfontDark, color = hamiTeal)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false}, enabled = !isCheckingPassword){
+                    Text("إلغاء", fontFamily = AlfontDark)
+                }
+            },
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+            containerColor = Color.White
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -156,7 +247,11 @@ fun ChildSetupScreen(isServiceEnabled: Boolean, onEnableClick: () -> Unit, onLog
             horizontalArrangement = Arrangement.End
         ) {
             Button(
-                onClick = onLogout,
+                onClick = {
+                    logoutPassword = ""
+                    logoutError = null
+                    showLogoutDialog = true
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                 shape = RectangleShape
             ) {

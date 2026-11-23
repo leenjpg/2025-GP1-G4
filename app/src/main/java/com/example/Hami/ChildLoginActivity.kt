@@ -411,7 +411,7 @@ fun ChildLoginScreen(
                                     color = hamiTeal
                                 )
                                 Text(
-                                    text = "العمر: ${child.age} سنة",
+                                    text = "العمر: ${child.age} ${if (child.age >= 11) "سنة" else "سنوات"}",
                                     fontSize = 12.sp,
                                     fontFamily = AlfontDark,
                                     color = Color.Gray
@@ -424,22 +424,16 @@ fun ChildLoginScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+            } else{
+                Text(
+                    "لم تتم إضافة أي أطفال بعد، قم بإضافة الأطفال من تطبيق ولي الأمر أولًا",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    fontFamily = AlfontDark,
+                    textAlign = TextAlign.Center
+                )
             }
 
-            // Button to create new child (always visible)
-            Button(
-                onClick = {
-                    selectedChild = null
-                    showCreateChildForm = true
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("إضافة طفل جديد", color = Color.White, fontSize = 16.sp, fontFamily = AlfontDark)
-            }
 
             errorMessage?.let {
                 Text(text = it, color = Color.Red, modifier = Modifier.padding(top = 8.dp), fontFamily = AlfontDark)
@@ -447,36 +441,46 @@ fun ChildLoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = {
-                    if (selectedChild == null && childrenList.isNotEmpty()) {
-                        errorMessage = "الرجاء اختيار طفل"
-                        return@Button
-                    }
-                    if (selectedChild != null) {
-                        isLoading = true
-                        val parentUser = authManager.getCurrentUser()
-                        if (parentUser != null && selectedChild != null) {
-                            onLoginSuccess(parentUser, selectedChild!!)
-                        } else {
-                            errorMessage = "حدث خطأ"
-                            isLoading = false
-                        }
-                    } else if (childrenList.isEmpty()) {
-                        errorMessage = "الرجاء إضافة طفل أولاً"
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
-                enabled = !isLoading && (selectedChild != null || childrenList.isEmpty())
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("تأكيد وربط الجهاز", color = Color.White, fontSize = 18.sp, fontFamily = AlfontDark)
-                }
-            }
+           if (childrenList.isNotEmpty()) {
+               Button(
+                   onClick = {
+                       if (selectedChild == null && childrenList.isNotEmpty()) {
+                           errorMessage = "الرجاء اختيار طفل"
+                           return@Button
+                       }
+                       if (selectedChild != null) {
+                           isLoading = true
+                           val parentUser = authManager.getCurrentUser()
+                           if (parentUser != null && selectedChild != null) {
+                               onLoginSuccess(parentUser, selectedChild!!)
+                           } else {
+                               errorMessage = "حدث خطأ"
+                               isLoading = false
+                           }
+                       } else if (childrenList.isEmpty()) {
+                           errorMessage = "الرجاء إضافة طفل أولاً"
+                       }
+                   },
+                   modifier = Modifier.fillMaxWidth().height(64.dp),
+                   shape = RectangleShape,
+                   colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
+                   enabled = !isLoading && selectedChild != null
+               ) {
+                   if (isLoading) {
+                       CircularProgressIndicator(
+                           color = Color.White,
+                           modifier = Modifier.size(24.dp)
+                       )
+                   } else {
+                       Text(
+                           "تأكيد وربط الجهاز",
+                           color = Color.White,
+                           fontSize = 18.sp,
+                           fontFamily = AlfontDark
+                       )
+                   }
+               }
+           }
 
             Spacer(modifier = Modifier.height(16.dp))
 

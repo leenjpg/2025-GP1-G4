@@ -77,6 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.example.Hami.quiz.ui.QuizProgressSection
 import androidx.compose.material.icons.filled.Delete
 
+
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
 
@@ -1509,9 +1510,13 @@ fun SettingsTab(onLogout: () -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            // ===== manage children =====
+            ManageChildrenSection(parentId = parentId, hamiTeal = hamiTeal)
 
+            Spacer(modifier = Modifier.height(16.dp))
             // ===== Safe Words Management =====
             SafeWordsSettingsSection(parentId = parentId, hamiTeal = hamiTeal)
+
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -1532,6 +1537,336 @@ fun SettingsTab(onLogout: () -> Unit) {
         }
     }
 }
+// ==== manage children: parent adds children here ====
+@Composable
+fun ManageChildrenSection(parentId: String, hamiTeal: Color){
+    var children by remember { mutableStateOf<List<ChildProfile>>(emptyList())}
+    var isLoading by remember {mutableStateOf(true)}
+    var newChildName by remember {mutableStateOf("")}
+    var newChildAge by remember {mutableStateOf("")}
+    var isAdding by remember {mutableStateOf(false)}
+    var errorMessage by remember {mutableStateOf<String?>(null)}
+    var showAddForm by remember {mutableStateOf(false)}
+    var childToDelete by remember {mutableStateOf<ChildProfile?>(null)}
+    var deleteBlockedName by remember {mutableStateOf<String?>(null)}
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+
+    //load the children for this parent
+    LaunchedEffect(parentId){
+        if (parentId.isBlank()){
+            isLoading = false
+            return@LaunchedEffect
+        }
+        FirebaseFirestore.getInstance().collection("child")
+            .whereEqualTo("parentId", parentId)
+            .get()
+            .addOnSuccessListener { result ->
+                children = result.documents.map { doc ->
+               ChildProfile(
+                   childId = doc.getString("childId")?: doc.id,
+                   parentId = doc.getString("parentId")?: "",
+                   childName = doc.getString("childName")?: "",
+                   age = doc.getLong("age")?.toInt()?:0
+
+               )
+                }.sortedBy { it.childName }
+                isLoading = false
+            }
+            .addOnFailureListener {
+                errorMessage = "تعذر تحميل بيانات الأطفال"
+                isLoading = false
+            }
+    }
+    //confirm before deleting a child
+    childToDelete?.let { child ->
+        AlertDialog(
+            onDismissRequest = { childToDelete = null},
+            title = { HamiSectionTitle("حذف الطفل", 20.sp)},
+            text = {
+                Text(
+                    "هل أنت متأكد من حذف ملف ${child.childName}؟ سيتم حذف جميع التنبيهات الخاصة بهذا الطفل.",
+                    fontFamily = AlfontDark
+
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val db = FirebaseFirestore.getInstance()
+                    // delete this child's alerts (only this parent, only this child)
+                    db.collection("alert")
+                        .whereEqualTo("parentId", parentId)
+                        .whereEqualTo("childId", child.childId)
+                        .get()
+                        .addOnSuccessListener { snapshot ->
+                            val batches = snapshot.documents.chunked(400).map { chunk ->
+                                val batch = db.batch()
+                                chunk.forEach { batch.delete(it.reference)}
+                                batch.commit()
+                            }
+                            //after alerts are deleted, delete child document
+                            com.google.android.gms.tasks.Tasks.whenAll(batches)
+                                .addOnSuccessListener {
+                                    db.collection("child").document(child.childId)
+                                        .delete()
+                                        .addOnSuccessListener {
+                                            children = children.filterNot { it.childId == child.childId }
+                                            android.widget.Toast.makeText(context, "تم حذف حساب الطفل بنجاح", android.widget.Toast.LENGTH_SHORT).show()
+
+                                        }
+                                }
+
+                        }
+                    childToDelete = null
+                }) {
+                    Text("حذف", fontFamily = AlfontDark, color = Color(0xFFD32F2F))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { childToDelete = null}){
+                    Text("إلغاء", fontFamily = AlfontDark)
+                }
+            },
+            shape = RoundedCornerShape(18.dp),
+            containerColor = Color.White
+        )
+    }
+    // when deleting is blocked becuase of protection being on
+    deleteBlockedName?.let { name ->
+        AlertDialog(
+            onDismissRequest = { deleteBlockedName = null},
+            title = { HamiSectionTitle("لا يمكن حذف الطفل", 20.sp)},
+            text = {
+                Text(
+                    "الحماية مفعلة على جهاز $name. يرجى تسجيل الخروج من جهاز الطفل أولاً، ثم أعد المحاولة.",
+                    fontFamily = AlfontDark
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { deleteBlockedName = null}){
+                    Text("حسنًا", fontFamily = AlfontDark, color = hamiTeal)
+                }
+            },
+            shape = RoundedCornerShape(18.dp),
+            containerColor = Color.White
+        )
+    }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ){
+        Column( modifier = Modifier.fillMaxWidth().padding(16.dp)){
+            //header
+            Row(verticalAlignment = Alignment.CenterVertically){
+                Icon(
+                    Icons.Filled.People,
+                    contentDescription = null,
+                    tint = hamiTeal,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("إدارة الأطفال", fontSize = 18.sp, fontFamily = AlfontDark, color = hamiTeal)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("أضف أطفالك هنا، ثم اختر الطفل عند إعداد جهازه الخاص", fontSize = 12.sp, fontFamily = AlfontDark, color = Color.Gray)
+            Spacer(modifier = Modifier.height(14.dp))
+            //Children list
+            when {
+                isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ){
+                        CircularProgressIndicator(color = hamiTeal, modifier = Modifier.size(24.dp))
+                    }
+                }
+                children.isEmpty() -> {
+                    Text(
+                        "لم تتم إضافة أي أطفال بعد",
+                        fontSize = 13.sp,
+                        fontFamily = AlfontDark,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                else -> {
+                    children.forEach { child ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                child.childName,
+                                fontSize = 15.sp,
+                                fontFamily = AlfontDark,
+                                color = Color.DarkGray,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                "العمر: ${child.age} ${if (child.age >= 11)"سنة" else "سنوات"}",
+                                fontSize = 12.sp,
+                                fontFamily = AlfontDark,
+                                color = Color.Gray
+                            )
+                            IconButton(
+                                onClick = {
+                                    //firestore check first for if protection is on or not
+                                    FirebaseFirestore.getInstance().collection("child")
+                                        .document(child.childId)
+                                        .get()
+                                        .addOnSuccessListener{ doc ->
+                                            if (doc.getBoolean("accessibilityServiceEnabled") == true){
+                                                deleteBlockedName = child.childName
+                                            }else {
+                                                childToDelete = child
+                                            }
+                                        }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Filled.Cancel,
+                                    contentDescription = "حذف",
+                                    tint = Color(0xFFD32F2F)
+                                )
+                            }
+                        }
+
+                    }
+                }
+            }
+                Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = Color(0xFFE0E0E0))
+
+            //add child new row w motion
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable{ showAddForm = !showAddForm}
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ){
+                HamiSectionTitle("إضافة طفل", 16.sp)
+                Icon(
+                    imageVector = if (showAddForm) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (showAddForm) "إخفاء" else "عرض",
+                    tint = hamiTeal
+                )
+            }
+            AnimatedVisibility(visible = showAddForm) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+
+
+                    // add child
+                    OutlinedTextField(
+                        value = newChildName,
+                        onValueChange = { newChildName = it; errorMessage = null },
+                        label = { Text("اسم الطفل", fontFamily = AlfontDark, fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !isAdding,
+                        textStyle = LocalTextStyle.current.copy(
+                            fontFamily = AlfontDark,
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Content
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = newChildAge,
+                        onValueChange = { newChildAge = it; errorMessage = null },
+                        label = { Text("عمر الطفل", fontFamily = AlfontDark, fontSize = 12.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = !isAdding,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        textStyle = LocalTextStyle.current.copy(
+                            textDirection = androidx.compose.ui.text.style.TextDirection.Content
+                        )
+                    )
+                    errorMessage?.let {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(it, color = Color.Red, fontSize = 12.sp, fontFamily = AlfontDark)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            //same validation as old form
+                            val name = newChildName.trim()
+                            if (name.isBlank()) {
+                                errorMessage = "يرجى إدخال اسم الطفل"
+                                return@Button
+                            }
+                            val age = newChildAge.trim().toIntOrNull()
+                            if (age == null || age < 1 || age > 18) {
+                                errorMessage = "يجب أن يكون عمر الطفل بين 1 و 18"
+                                return@Button
+                            }
+                            isAdding = true
+                            val childId = "child_${System.currentTimeMillis()}"
+
+                            val childData = hashMapOf(
+                                "childId" to childId,
+                                "parentId" to parentId,
+                                "childName" to name,
+                                "age" to age,
+                                "deviceId" to "",
+                                "createdAt" to com.google.firebase.Timestamp.now(),
+                                "accessibilityServiceEnabled" to false
+                            )
+                            FirebaseFirestore.getInstance().collection("child").document(childId)
+                                .set(childData)
+                                .addOnSuccessListener {
+                                    children = (children + ChildProfile(
+                                        childId = childId,
+                                        parentId = parentId,
+                                        childName = name,
+                                        age = age
+                                    )
+                                            ).sortedBy { it.childName }
+                                    newChildName = ""
+                                    newChildAge = ""
+                                    errorMessage = null
+                                    isAdding = false
+                                    showAddForm = false
+
+                                }
+                                .addOnFailureListener {
+                                    errorMessage = "تعذر إضافة الطفل"
+                                    isAdding = false
+                                }
+                        },
+                        enabled = !isAdding && parentId.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) {
+                        if (isAdding) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                "حفظ",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontFamily = AlfontDark
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SafeWordsSettingsSection(parentId: String, hamiTeal: Color) {
     // Current list of (normalized, original) pairs
