@@ -134,21 +134,7 @@ class QuizAlertCounter(
 
         var trigger: PendingQuizTrigger? = null
 
-        /*
-         * UPDATED WEEKLY QUIZ LOGIC
-         *
-         * OLD:
-         * A quiz was triggered at 5, 10, 15, 20...
-         *
-         * NEW:
-         * A quiz is triggered only at the fifth alert.
-         *
-         * lastMilestone == 0 means the weekly quiz
-         * has not been triggered yet.
-         *
-         * Once triggered, lastMilestone becomes 1.
-         * It remains 1 until the next calendar week.
-         */
+
         if (
             state.count == threshold &&
             state.lastMilestone == 0

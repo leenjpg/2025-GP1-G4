@@ -12,6 +12,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
@@ -96,6 +101,35 @@ private fun HamiSectionTitle(text: String, fontSize: androidx.compose.ui.unit.Te
         fontWeight = FontWeight.Normal,
         color = Color(0xFF52879C)
     )
+}
+
+/** A unified icon-and-title style for all weekly-report card headings. */
+@Composable
+private fun HamiReportHeading(
+    title: String,
+    icon: ImageVector,
+    fontSize: androidx.compose.ui.unit.TextUnit = 18.sp
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Color(0xFFE3EDF2)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null, // The adjacent title is the accessible label.
+                tint = Color(0xFF52879C),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        HamiSectionTitle(title, fontSize)
+    }
 }
 
 @Composable
@@ -356,7 +390,7 @@ fun DashboardScreen(
                     title = { Text("حامي", fontFamily = AlfontDark, color = Color(0xFF52879C)) },
                     actions = {
                         IconButton(onClick = onRefresh) {
-                            Icon(Icons.Filled.DateRange, contentDescription = "تحديث", tint = Color(0xFF52879C))
+                            Icon(Icons.Filled.Refresh, contentDescription = "تحديث البيانات", tint = Color(0xFF52879C))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -1123,6 +1157,8 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
 
     val weeks = remember(allAlerts) { getAvailableWeeks(allAlerts) }
     var selectedWeekIndex by remember { mutableStateOf(0) }
+    // The summary remains mounted when switching weeks; only its details expand.
+    var isSummaryExpanded by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(weeks.size) {
         if (selectedWeekIndex >= weeks.size && weeks.isNotEmpty()) {
@@ -1135,7 +1171,6 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
     } else null
 
     // Same Monday-based ISO week key used when Hami saves quizProgress in Firestore.
-    // Example: week 46 of 2026 -> "2026-11-09".
     val selectedQuizWeekStart = currentWeek?.let { week ->
         java.time.LocalDate.of(week.year, 1, 4)
             .with(java.time.temporal.WeekFields.ISO.weekOfWeekBasedYear(), week.weekNumber.toLong())
@@ -1164,6 +1199,7 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
     }
     val maxDayCount = dayCounts.maxOrNull()?.coerceAtLeast(1) ?: 1
 
+    // Keep the existing six-week comparison and its original calculation.
     val weeklyTotals = weeks.take(6).map { week ->
         val count = allAlerts.count { alert ->
             val date = Date(alert.timestamp)
@@ -1181,10 +1217,11 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
+        item(key = "report_title") {
             HamiPageTitle("التقارير الأسبوعية")
         }
-        item {
+
+        item(key = "week_selector") {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -1192,9 +1229,8 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    HamiSectionTitle("📅 اختيار الأسبوع")
+                    HamiReportHeading("اختيار الأسبوع", Icons.Filled.DateRange)
                     Spacer(modifier = Modifier.height(8.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1204,9 +1240,12 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                             onClick = { if (selectedWeekIndex < weeks.size - 1) selectedWeekIndex++ },
                             enabled = weeks.isNotEmpty() && selectedWeekIndex < weeks.size - 1
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "السابق", tint = hamiTeal)
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "الأسبوع السابق",
+                                tint = hamiTeal
+                            )
                         }
-
                         Text(
                             text = currentWeek?.displayName ?: "لا توجد بيانات",
                             fontSize = 16.sp,
@@ -1214,117 +1253,135 @@ fun ReportTabContent(allAlerts: List<AlertItem>) {
                             color = hamiTeal,
                             fontWeight = FontWeight.Bold
                         )
-
                         IconButton(
                             onClick = { if (selectedWeekIndex > 0) selectedWeekIndex-- },
                             enabled = weeks.isNotEmpty() && selectedWeekIndex > 0
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "التالي", tint = hamiTeal)
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "الأسبوع التالي",
+                                tint = hamiTeal
+                            )
                         }
                     }
                 }
             }
         }
 
-        // Quiz status follows the same week chosen in the card above.
+        // First report card: weekly summary. Tap it to expand the three existing charts.
+        item(key = "weekly_summary") {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isSummaryExpanded = !isSummaryExpanded }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            HamiReportHeading("ملخص الأسبوع", Icons.Filled.Assessment)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${weekAlerts.size} إجمالي التهديدات",
+                                fontSize = 15.sp,
+                                fontFamily = AlfontDark,
+                                color = hamiTeal,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isSummaryExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = if (isSummaryExpanded) "إخفاء تفاصيل الملخص" else "عرض تفاصيل الملخص",
+                            tint = hamiTeal
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isSummaryExpanded) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                            HorizontalDivider(color = Color(0xFFE5EBEF))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HamiReportHeading("أنواع التهديدات", Icons.Filled.BarChart, fontSize = 16.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            threatTypes.forEach { type ->
+                                val count = typeCounts[type] ?: 0
+                                val color = threatColors[type] ?: Color.Gray
+                                val displayName = threatDisplayNames[type] ?: type
+                                BarChartRow(displayName, count, maxTypeCount, color)
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+                            HorizontalDivider(color = Color(0xFFE5EBEF))
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HamiReportHeading("التوزيع اليومي", Icons.Filled.Today, fontSize = 16.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            daysOfWeek.forEachIndexed { index, day ->
+                                val count = dayCounts[index]
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                ) {
+                                    Text(day, fontSize = 11.sp, modifier = Modifier.width(70.dp), fontFamily = AlfontDark, color = Color.Gray)
+                                    Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
+                                        Box(
+                                            modifier = Modifier.fillMaxHeight()
+                                                .fillMaxWidth(count.toFloat() / maxDayCount)
+                                                .background(hamiTeal)
+                                        )
+                                    }
+                                    Text(
+                                        "$count", fontSize = 12.sp,
+                                        modifier = Modifier.width(40.dp).padding(start = 10.dp),
+                                        fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (weeklyTotals.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                                HorizontalDivider(color = Color(0xFFE5EBEF))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                HamiReportHeading("التوزيع الأسبوعي", Icons.Filled.ShowChart, fontSize = 16.sp)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                weeklyTotals.forEach { (weekName, count) ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                                    ) {
+                                        Text(weekName, fontSize = 11.sp, modifier = Modifier.width(70.dp), fontFamily = AlfontDark, color = Color.Gray)
+                                        Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
+                                            Box(
+                                                modifier = Modifier.fillMaxHeight()
+                                                    .fillMaxWidth(count.toFloat() / maxWeeklyCount)
+                                                    .background(hamiTeal)
+                                            )
+                                        }
+                                        Text(
+                                            "$count", fontSize = 12.sp,
+                                            modifier = Modifier.width(40.dp).padding(start = 10.dp),
+                                            fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Last report card: quiz progress is collapsible and follows the selected week.
         if (selectedQuizWeekStart != null && currentWeek != null) {
             item(key = "quiz_progress") {
                 QuizProgressSection(
-                    selectedWeekStart = selectedQuizWeekStart,
-                    selectedWeekLabel = currentWeek.displayName
+                    selectedWeekStart = selectedQuizWeekStart
                 )
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    HamiSectionTitle("📊 أنواع التهديدات")
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    threatTypes.forEach { type ->
-                        val count = typeCounts[type] ?: 0
-                        val color = threatColors[type] ?: Color.Gray
-                        val displayName = threatDisplayNames[type] ?: type
-                        BarChartRow(displayName, count, maxTypeCount, color)
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    HamiSectionTitle("📊 التوزيع اليومي")
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    daysOfWeek.forEachIndexed { index, day ->
-                        val count = dayCounts[index]
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Text(day, fontSize = 11.sp, modifier = Modifier.width(70.dp), fontFamily = AlfontDark, color = Color.Gray)
-                            Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
-                                Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(if (maxDayCount > 0) count.toFloat() / maxDayCount else 0f).background(hamiTeal))
-                            }
-                            Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp).padding(start = 10.dp), fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (weeklyTotals.isNotEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        HamiSectionTitle("📈 التوزيع الأسبوعي")
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        weeklyTotals.forEach { (weekName, count) ->
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                                Text(weekName, fontSize = 11.sp, modifier = Modifier.width(70.dp), fontFamily = AlfontDark, color = Color.Gray)
-                                Box(modifier = Modifier.weight(1f).height(24.dp).background(Color(0xFFE0E0E0))) {
-                                    Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(count.toFloat() / maxWeeklyCount).background(hamiTeal))
-                                }
-                                Text("$count", fontSize = 12.sp, modifier = Modifier.width(40.dp).padding(start = 10.dp), fontFamily = AlfontDark, color = hamiTeal, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    HamiSectionTitle("📋 ملخص الأسبوع")
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("${weekAlerts.size}", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = hamiTeal)
-                            Text("إجمالي التهديدات", fontSize = 12.sp, color = Color.Gray, fontFamily = AlfontDark)
-                        }
-                    }
-                }
             }
         }
     }

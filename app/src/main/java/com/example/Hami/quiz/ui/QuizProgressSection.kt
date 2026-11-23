@@ -1,12 +1,16 @@
 package com.example.Hami.quiz.ui
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.School
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,8 +57,7 @@ private data class ChildQuizReport(
  */
 @Composable
 fun QuizProgressSection(
-    selectedWeekStart: String,
-    selectedWeekLabel: String
+    selectedWeekStart: String
 ) {
 
     val parentId = remember {
@@ -163,131 +166,119 @@ fun QuizProgressSection(
         }
     }
 
-    // Keep this card mounted while the selected week changes.
-    // The Firestore snapshot listener is keyed only to the parent, not the week.
-    // Switching weeks filters the already loaded results without reloading them.
+    // Firestore listener remains active while changing weeks or expanding the card.
+    // Only completed quizzes for the selected week are shown when expanded.
+    val completedChildren = children.filter { child ->
+        child.progress.any { record ->
+            record.week == selectedWeekStart && record.status.equals("completed", ignoreCase = true)
+        }
+    }
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = tween(durationMillis = 240)),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-
-            Text(
-                text = "🎓 متابعة الاختبارات التوعوية",
-                fontSize = 18.sp,
-                fontFamily = quizFont,
-                fontWeight = FontWeight.Bold,
-                color = quizTeal
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Text(
-                text = "الاختبارات التوعوية المنجزة والمستحقة للأطفال",
-                fontSize = 12.sp,
-                fontFamily = quizFont,
-                color = Color.Gray
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Text(
-                text = "الأسبوع المحدد: $selectedWeekLabel",
-                fontSize = 12.sp,
-                fontFamily = quizFont,
-                color = quizTeal
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
-            when {
-
-                parentId == null -> {
-
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(
+                                    color = Color(0xFFE3EDF2),
+                                    shape = RoundedCornerShape(9.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.School,
+                                contentDescription = null,
+                                tint = quizTeal,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = "متابعة الاختبارات التوعوية",
+                            fontSize = 18.sp,
+                            fontFamily = quizFont,
+                            fontWeight = FontWeight.Bold,
+                            color = quizTeal
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "يرجى تسجيل الدخول لعرض بيانات الأطفال",
+                        text = when {
+                            parentId.isNullOrBlank() -> "يرجى تسجيل الدخول"
+                            isLoading -> "جارٍ تحديث نتائج الاختبارات..."
+                            errorMessage != null -> "تعذر تحديث نتائج الاختبارات"
+                            else -> "الأطفال الذين أكملوا الاختبار: ${completedChildren.size}"
+                        },
+                        fontSize = 12.sp,
                         fontFamily = quizFont,
                         color = Color.Gray
                     )
                 }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (isExpanded) "إخفاء أسماء الأطفال" else "عرض أسماء الأطفال",
+                    tint = quizTeal
+                )
+            }
 
-                isLoading -> {
-
-                    CircularProgressIndicator(
-                        color = quizTeal,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .align(Alignment.CenterHorizontally)
-                    )
-                }
-
-                errorMessage != null -> {
-
-                    Text(
-                        text = errorMessage ?: "",
-                        fontFamily = quizFont,
-                        color = Color(0xFFC62828)
-                    )
-                }
-
-                else -> {
-                    // Crossfade only the week-specific contents; the card itself
-                    // and its Firebase listener stay alive during transitions.
-                    Crossfade(
-                        targetState = selectedWeekStart,
-                        animationSpec = tween(durationMillis = 220),
-                        label = "quizWeekTransition"
-                    ) { displayedWeek ->
-                        val weekChildren = children.filter { child ->
-                            child.progress.any { progress ->
-                                progress.week == displayedWeek
-                            }
-                        }
-
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            if (weekChildren.isEmpty()) {
-                                // Show one compact message for the whole selected week,
-                                // never a repeated message for each child.
-                                Text(
-                                    text = "لا توجد اختبارات مسجلة لهذا الأسبوع",
-                                    fontSize = 12.sp,
-                                    fontFamily = quizFont,
-                                    color = Color.Gray
-                                )
-                            } else {
-                                weekChildren.forEachIndexed { index, child ->
-                                    ChildQuizProgressItem(
-                                        child = child,
-                                        selectedWeekStart = displayedWeek
-                                    )
-
-                                    if (index < weekChildren.lastIndex) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Spacer(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(1.dp)
-                                                .background(Color(0xFFE5EBEF))
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                }
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                ) {
+                    HorizontalDivider(color = Color(0xFFE5EBEF))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    when {
+                        parentId.isNullOrBlank() -> Text(
+                            text = "يرجى تسجيل الدخول لعرض نتائج الأطفال",
+                            fontFamily = quizFont,
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                        isLoading -> CircularProgressIndicator(
+                            color = quizTeal,
+                            modifier = Modifier.size(26.dp).align(Alignment.CenterHorizontally)
+                        )
+                        errorMessage != null -> Text(
+                            text = errorMessage ?: "تعذر تحميل النتائج",
+                            fontFamily = quizFont,
+                            color = Color(0xFFC62828),
+                            fontSize = 12.sp
+                        )
+                        completedChildren.isEmpty() -> Text(
+                            text = "لا توجد اختبارات مكتملة لهذا الأسبوع",
+                            fontFamily = quizFont,
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                        else -> completedChildren.forEachIndexed { index, child ->
+                            ChildQuizProgressItem(
+                                child = child,
+                                selectedWeekStart = selectedWeekStart
+                            )
+                            if (index < completedChildren.lastIndex) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(color = Color(0xFFE5EBEF))
+                                Spacer(modifier = Modifier.height(10.dp))
                             }
                         }
                     }
