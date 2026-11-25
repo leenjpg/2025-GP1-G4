@@ -567,58 +567,6 @@ fun TrendDashboard(trend: Trend, hamiTeal: Color) {
     ) {
         Box(modifier = Modifier.padding(bottom = 8.dp)) { HamiPageTitle("الوعي المجتمعي") }
 
-        DashboardCard(title = "الكلمات السلبية الأكثر رصداً في حامي", hamiTeal = hamiTeal) {
-            if (trend.topWords.isEmpty()) {
-                HamiNote("لا توجد بيانات كافية حالياً")
-            } else {
-                trend.topWords.take(5).forEachIndexed { index, word ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // ترتيب الرقم والكلمة
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "${index + 1}", // رقم الكلمة (1, 2, 3...)
-                                color = Color.Gray,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Text(text = word.word, fontFamily = AlfontDark, fontWeight = FontWeight.Bold, color = Color.DarkGray) // افترض أن اسم المتغير داخل الكلاس هو word
-                        }
-
-                        // عدد المرات
-                        Text(
-                            text = "${word.count} مرات",
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            fontFamily = AlfontDark
-                        )
-                    }
-                }
-            }
-        }
-
-        DashboardCard(title = "المنصات الأعلى تسجيلاً للتنبيهات", hamiTeal = hamiTeal) {
-            trend.topApps.forEach { app ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = app.name, fontFamily = AlfontDark, fontWeight = FontWeight.Bold, color = Color.DarkGray)
-                    Text(
-                        text = "${app.count} تنبيهات",
-                        color = Color.Gray,
-                        fontSize = 12.sp,
-                        fontFamily = AlfontDark
-                    )
-                }
-            }
-        }
-
         DashboardCard(
             title = "إحصائيات مجتمع حامي",
             hamiTeal = hamiTeal
@@ -692,13 +640,22 @@ fun TrendDashboard(trend: Trend, hamiTeal: Color) {
                             .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
                     ) {
                         // قسم "منخفض"
-                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if (riskLevel == 0) Color(0xFF388E3C) else Color(0xFFE0E0E0)))
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .background(if (riskLevel == 0) Color(0xFF388E3C) else Color(0xFFE0E0E0))
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         // قسم "متوسط"
-                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if (riskLevel == 1) Color(0xFFF57C00) else Color(0xFFE0E0E0)))
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .background(if (riskLevel == 1) Color(0xFFF57C00) else Color(0xFFE0E0E0))
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         // قسم "مرتفع"
-                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f).fillMaxHeight().background(if (riskLevel == 2) Color.Red else Color(0xFFE0E0E0)))
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                                .background(if (riskLevel == 2) Color.Red else Color(0xFFE0E0E0))
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -723,6 +680,58 @@ fun TrendDashboard(trend: Trend, hamiTeal: Color) {
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
+            }
+        }
+
+        DashboardCard(title = "الكلمات الأكثر رصداً في حامي", hamiTeal = hamiTeal) {
+            if (trend.topWords.isEmpty()) {
+                HamiNote("لا توجد بيانات كافية حالياً")
+            } else {
+                trend.topWords.take(5).forEachIndexed { index, word ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // ترتيب الرقم والكلمة
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${index + 1}",
+                                color = Color.Gray,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(text = word.word, fontFamily = AlfontDark, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                        }
+
+                        // عدد المرات
+                        Text(
+                            text = "${word.count} مرات",
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                            fontFamily = AlfontDark
+                        )
+                    }
+                }
+            }
+        }
+
+        DashboardCard(title = "المنصات الأعلى تسجيلاً للتنبيهات", hamiTeal = hamiTeal) {
+            trend.topApps.forEach { app ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = app.name, fontFamily = AlfontDark, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                    Text(
+                        text = "${app.count} تنبيهات",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        fontFamily = AlfontDark
+                    )
+                }
             }
         }
     }
@@ -1563,13 +1572,13 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
             .get()
             .addOnSuccessListener { result ->
                 children = result.documents.map { doc ->
-               ChildProfile(
-                   childId = doc.getString("childId")?: doc.id,
-                   parentId = doc.getString("parentId")?: "",
-                   childName = doc.getString("childName")?: "",
-                   age = doc.getLong("age")?.toInt()?:0
+                    ChildProfile(
+                        childId = doc.getString("childId")?: doc.id,
+                        parentId = doc.getString("parentId")?: "",
+                        childName = doc.getString("childName")?: "",
+                        age = doc.getLong("age")?.toInt()?:0
 
-               )
+                    )
                 }.sortedBy { it.childName }
                 isLoading = false
             }
@@ -1737,7 +1746,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                     }
                 }
             }
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = Color(0xFFE0E0E0))
 
             //add child new row w motion
