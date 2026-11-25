@@ -68,3 +68,66 @@ exports.generateWeeklyTrends = onSchedule({
 
     console.log("تم تحديث إحصائيات الأسبوع (الكلمات والتطبيقات) بنجاح! الإجمالي:", totalIncidents);
 });
+
+// Calculate age from birth date
+function calculateAge(birthDate, today) {
+    let age = today.getFullYear() - birthDate.getFullYear();
+
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+        monthDiff < 0 ||
+        (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+        age--;
+    }
+
+    return age;
+}
+
+// تحديث العمر
+exports.updateChildrenAges = onSchedule({
+    schedule: "0 0 * * *",
+    timeZone: "Asia/Riyadh"
+}, async () => {
+    const db = admin.firestore();
+
+    const today = new Date(
+        new Date().toLocaleDateString("en-CA", {
+            timeZone: "Asia/Riyadh"
+        }) + "T00:00:00"
+    );
+
+    const childrenSnapshot = await db.collection("child").get();
+
+    const writer = db.bulkWriter();
+    let updatedCount = 0;
+
+    childrenSnapshot.forEach(doc => {
+        const data = doc.data();
+
+        // Skip old profiles without a birth date
+        if (typeof data.birthDate !== "string") return;
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate)) return;
+
+        const birthDate = new Date(data.birthDate + "T00:00:00");
+
+        if (isNaN(birthDate.getTime()) || birthDate > today) return;
+
+        const newAge = calculateAge(birthDate, today);
+
+        // Update only when the age changes
+        if (newAge !== data.age) {
+            writer.update(doc.ref, {
+                age: newAge
+            });
+
+            updatedCount++;
+        }
+    });
+
+    await writer.close();
+
+    console.log("Age updates queued:", updatedCount);
+});

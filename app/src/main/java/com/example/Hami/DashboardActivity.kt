@@ -61,6 +61,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.ExpandLess
@@ -173,7 +174,7 @@ sealed class NavItem(val title: String, val icon: ImageVector) {
     object Safety : NavItem("توعية", Icons.Filled.Info)
     object Report : NavItem("تقارير", Icons.Filled.DateRange)
     object Alerts : NavItem("تنبيهات", Icons.Filled.Warning)
-    object Recommendations : NavItem("تقييمات", Icons.Filled.Lightbulb)
+    object Recommendations : NavItem("المخاطر", Icons.Filled.Lightbulb)
     object Settings : NavItem("إعدادات", Icons.Filled.Settings)
 }
 
@@ -354,20 +355,34 @@ fun DashboardScreen(
     var recommendationCategory by remember { mutableStateOf<String?>(null) }
     var recommendationApp by remember { mutableStateOf<HamiApp?>(null) }
     var showRecommendationFilter by remember { mutableStateOf(false) }
+    var showRiskLegend by remember(recommendationCategory, recommendationApp, selectedTab) { mutableStateOf(false) }
     val isRecommendationInnerPage = selectedTab == NavItem.Recommendations && recommendationCategory != null
 
+
+    if (showRiskLegend && isRecommendationInnerPage && recommendationApp == null) {
+        HamiRiskLegendDialog(onDismiss = { showRiskLegend = false })
+    }
 
     Scaffold(
         topBar = {
             if (isRecommendationInnerPage) {
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = if (recommendationApp != null) "تفاصيل التطبيق" else recommendationCategory.orEmpty(),
-                            fontFamily = AlfontDark,
-                            fontSize = 20.sp,
-                            color = Color(0xFF52879C)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (recommendationApp != null) "تفاصيل التطبيق" else recommendationCategory.orEmpty(),
+                                fontFamily = AlfontDark,
+                                fontSize = if (recommendationCategory == "التواصل الاجتماعي والمراسلة" && recommendationApp == null) 16.sp else 20.sp,
+                                color = hamiBlue,
+                                modifier = Modifier.weight(1f, fill = false),
+                                textAlign = TextAlign.Center
+                            )
+                            if (recommendationApp == null) {
+                                IconButton(onClick = { showRiskLegend = true }, modifier = Modifier.size(48.dp)) {
+                                    Icon(Icons.Filled.Info, contentDescription = "دلالات الرموز", tint = hamiBlue, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = {
@@ -1077,38 +1092,6 @@ fun AlertCard(alert: AlertItem, onMarkAsSafe: () -> Unit) {
                 }
             }
 
-            // ===== "This word is not harmful" action — only when text is visible =====
-            if (showAlertText && alert.detectedWord.isNotBlank() && !safeConfirmed) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = {
-                        safeConfirmed = true
-                        onMarkAsSafe()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50)
-                    )
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.Shield,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "هذه الكلمة غير ضارة",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            fontFamily = AlfontDark
-                        )
-                    }
-                }
-            }
-
             // ===== Confirmation state after tapping =====
             if (safeConfirmed) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -1129,21 +1112,54 @@ fun AlertCard(alert: AlertItem, onMarkAsSafe: () -> Unit) {
                 }
             }
 
-            // ===== Optional footer: context chip =====
-            if (alert.context.isNotEmpty() && alert.context != "unknown") {
-                Spacer(modifier = Modifier.height(8.dp))
-                val contextLabel = when (alert.context) {
-                    "keyboard_input" -> "⌨️ لوحة المفاتيح"
-                    "notification" -> "🔔 إشعار"
-                    "screen_reading" -> "📱 قراءة الشاشة"
-                    else -> alert.context
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                if (alert.context.isNotEmpty() && alert.context != "unknown") {
+                    val contextLabel = when (alert.context) {
+                        "keyboard_input" -> "⌨️ لوحة المفاتيح"
+                        "notification" -> "🔔 إشعار"
+                        "screen_reading" -> "📱 قراءة الشاشة"
+                        else -> alert.context
+                    }
+                    Text(
+                        text = contextLabel,
+                        fontSize = 11.sp,
+                        fontFamily = AlfontDark,
+                        color = Color(0xFFB0BEC5)
+                    )
                 }
-                Text(
-                    text = contextLabel,
-                    fontSize = 11.sp,
-                    fontFamily = AlfontDark,
-                    color = Color(0xFFB0BEC5)
-                )
+                Spacer(modifier = Modifier.weight(1f))
+                if (showAlertText && alert.detectedWord.isNotBlank() && !safeConfirmed) {
+                    Button(
+                        onClick = {
+                            safeConfirmed = true
+                            onMarkAsSafe()
+                        },
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF4CAF50)
+                        )
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.Shield,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "كلمة آمنة",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontFamily = AlfontDark
+                            )
+                        }
+                    }
+                }
+
             }
         }
     }
@@ -1489,7 +1505,7 @@ fun SettingsTab(onLogout: () -> Unit) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "عند التفعيل، سيظهر النص الكامل للرسالة في التنبيهات",
+                            "عند التفعيل، ستظهر الكلمة المسيئة التي تم رصدها في التنبيهات",
                             fontSize = 12.sp,
                             fontFamily = AlfontDark,
                             color = Color.Gray
@@ -1543,7 +1559,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
     var children by remember { mutableStateOf<List<ChildProfile>>(emptyList())}
     var isLoading by remember {mutableStateOf(true)}
     var newChildName by remember {mutableStateOf("")}
-    var newChildAge by remember {mutableStateOf("")}
+    var birthDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
     var isAdding by remember {mutableStateOf(false)}
     var errorMessage by remember {mutableStateOf<String?>(null)}
     var showAddForm by remember {mutableStateOf(false)}
@@ -1563,13 +1579,13 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
             .get()
             .addOnSuccessListener { result ->
                 children = result.documents.map { doc ->
-               ChildProfile(
-                   childId = doc.getString("childId")?: doc.id,
-                   parentId = doc.getString("parentId")?: "",
-                   childName = doc.getString("childName")?: "",
-                   age = doc.getLong("age")?.toInt()?:0
+                    ChildProfile(
+                        childId = doc.getString("childId")?: doc.id,
+                        parentId = doc.getString("parentId")?: "",
+                        childName = doc.getString("childName")?: "",
+                        age = doc.getLong("age")?.toInt()?:0
 
-               )
+                    )
                 }.sortedBy { it.childName }
                 isLoading = false
             }
@@ -1670,7 +1686,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                 Text("إدارة الأطفال", fontSize = 18.sp, fontFamily = AlfontDark, color = hamiTeal)
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text("أضف أطفالك هنا، ثم اختر الطفل عند إعداد جهازه الخاص", fontSize = 12.sp, fontFamily = AlfontDark, color = Color.Gray)
+            Text("أضف أطفالك هنا، ثم حدد الطفل عند إعداد جهازه الخاص", fontSize = 12.sp, fontFamily = AlfontDark, color = Color.Gray)
             Spacer(modifier = Modifier.height(14.dp))
             //Children list
             when {
@@ -1737,7 +1753,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                     }
                 }
             }
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = Color(0xFFE0E0E0))
 
             //add child new row w motion
@@ -1761,51 +1777,27 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
 
 
                     // add child
-                    OutlinedTextField(
-                        value = newChildName,
-                        onValueChange = { newChildName = it; errorMessage = null },
-                        label = { Text("اسم الطفل", fontFamily = AlfontDark, fontSize = 12.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !isAdding,
-                        textStyle = LocalTextStyle.current.copy(
-                            fontFamily = AlfontDark,
-                            textDirection = androidx.compose.ui.text.style.TextDirection.Content
-                        )
-                    )
+                    HamiCompactField(newChildName, { newChildName = it; errorMessage = null }, "اسم الطفل", enabled = !isAdding)
                     Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = newChildAge,
-                        onValueChange = { newChildAge = it; errorMessage = null },
-                        label = { Text("عمر الطفل", fontFamily = AlfontDark, fontSize = 12.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        enabled = !isAdding,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        ),
-                        textStyle = LocalTextStyle.current.copy(
-                            textDirection = androidx.compose.ui.text.style.TextDirection.Content
-                        )
-                    )
+                    HamiBirthDateField(birthDate, { birthDate = it; errorMessage = null }, !isAdding)
                     errorMessage?.let {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(it, color = Color.Red, fontSize = 12.sp, fontFamily = AlfontDark)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
+                    HamiSaveButton(
                         onClick = {
                             //same validation as old form
                             val name = newChildName.trim()
                             if (name.isBlank()) {
                                 errorMessage = "يرجى إدخال اسم الطفل"
-                                return@Button
+                                return@HamiSaveButton
                             }
-                            val age = newChildAge.trim().toIntOrNull()
+                            val selectedDate = birthDate
+                            val age = selectedDate?.let { java.time.Period.between(it, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Riyadh"))).years }
                             if (age == null || age < 1 || age > 18) {
                                 errorMessage = "يجب أن يكون عمر الطفل بين 1 و 18"
-                                return@Button
+                                return@HamiSaveButton
                             }
                             isAdding = true
                             val childId = "child_${System.currentTimeMillis()}"
@@ -1815,6 +1807,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                                 "parentId" to parentId,
                                 "childName" to name,
                                 "age" to age,
+                                "birthDate" to selectedDate.toString(),
                                 "deviceId" to "",
                                 "createdAt" to com.google.firebase.Timestamp.now(),
                                 "accessibilityServiceEnabled" to false
@@ -1830,7 +1823,7 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                                     )
                                             ).sortedBy { it.childName }
                                     newChildName = ""
-                                    newChildAge = ""
+                                    birthDate = null
                                     errorMessage = null
                                     isAdding = false
                                     showAddForm = false
@@ -1842,25 +1835,9 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                                 }
                         },
                         enabled = !isAdding && parentId.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                    ) {
-                        if (isAdding) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                "حفظ",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontFamily = AlfontDark
-                            )
-                        }
-                    }
+                        isLoading = isAdding,
+                        modifier = Modifier.align(Alignment.End)
+                    )
                 }
             }
         }
@@ -1927,27 +1904,14 @@ fun SafeWordsSettingsSection(parentId: String, hamiTeal: Color) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = newWord,
-                    onValueChange = { newWord = it; errorMessage = null },
-                    label = {
-                        Text("أضف كلمة آمنة", fontFamily = AlfontDark, fontSize = 12.sp)
-                    },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    enabled = !isAdding,
-                    textStyle = LocalTextStyle.current.copy(
-                        fontFamily = AlfontDark,
-                        textDirection = androidx.compose.ui.text.style.TextDirection.Content
-                    )
-                )
+                HamiCompactField(newWord, { newWord = it; errorMessage = null }, "أضف كلمة آمنة", Modifier.weight(1f), !isAdding)
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(
+                HamiSaveButton(
                     onClick = {
                         val trimmed = newWord.trim()
                         if (trimmed.isBlank()) {
                             errorMessage = "اكتب كلمة أولاً"
-                            return@Button
+                            return@HamiSaveButton
                         }
                         isAdding = true
                         SafeWordsRepository.addSafeWord(
@@ -1969,20 +1933,8 @@ fun SafeWordsSettingsSection(parentId: String, hamiTeal: Color) {
                         }
                     },
                     enabled = !isAdding && parentId.isNotBlank(),
-                    modifier = Modifier.height(56.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                ) {
-                    if (isAdding) {
-                        CircularProgressIndicator(
-                            color = Color.White,
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("إضافة", color = Color.White, fontSize = 14.sp, fontFamily = AlfontDark)
-                    }
-                }
+                    isLoading = isAdding
+                )
             }
 
             errorMessage?.let {
@@ -2061,7 +2013,7 @@ private data class HamiControl(
     val toolName: String, val toolDescription: String, val steps: List<String>
 )
 private val hamiRiskNames = linkedMapOf(
-    "textVoiceChat" to "المحادثات النصية والصوتية",
+    "textVoiceChat" to "التواصل مع الغرباء",
     "inappropriateContent" to "محتوى غير ملائم",
     "personalInfoSharing" to "مشاركة المعلومات الشخصية",
     "inAppPurchases" to "عمليات شراء داخل التطبيق"
@@ -2120,6 +2072,45 @@ private fun HamiRiskCircle(count: Int, size: androidx.compose.ui.unit.Dp = 39.dp
                 fontSize = if (size < 30.dp) 12.sp else 16.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+@Composable
+private fun HamiRiskLegendDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                HamiSectionTitle("دلالات الرموز", 20.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Filled.Shield, contentDescription = null, tint = hamiBlue, modifier = Modifier.size(26.dp))
+                    Text("تتوفر أدوات للرقابة الأبوية في التطبيق.", fontFamily = AlfontDark, fontSize = 14.sp)
+                }
+                HorizontalDivider(color = Color(0xFFE0E0E0))
+                HamiSectionTitle("مؤشرات المخاطر", 16.sp)
+                Text("يشير الرقم إلى عدد مؤشرات المخاطر التي تنطبق على التطبيق من بين أربعة مؤشرات.", fontFamily = AlfontDark, fontSize = 14.sp)
+                listOf(
+                    0 to "لا ينطبق أي من مؤشرات المخاطر.",
+                    1 to "ينطبق مؤشر خطر واحد.",
+                    4 to "تنطبق جميع مؤشرات المخاطر الأربعة."
+                ).forEach { (count, explanation) ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        HamiRiskCircle(count, 28.dp)
+                        Text(explanation, fontFamily = AlfontDark, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("تم", fontFamily = AlfontDark, color = hamiBlue) } },
+        shape = RoundedCornerShape(18.dp),
+        containerColor = Color.White
+    )
 }
 
 private fun hamiAgeLabel(age: Int): String = "مناسب لعمر $age ${if (age >= 11) "سنة" else "سنوات"} فأكثر"
@@ -2205,8 +2196,7 @@ private fun RecommendationsTabContent(
             modifier = Modifier.fillMaxSize().background(hamiBackground).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            HamiPageTitle("تقييم أمان التطبيقات")
-            HamiNote("تعرّف على المخاطر المحتملة في التطبيقات وطرق الرقابة الأبوية المتاحة")
+            HamiPageTitle("مخاطر التطبيقات")
             GuideCategoryCard("الألعاب", Icons.Filled.SportsEsports, Modifier.weight(1f)) { onCategorySelected("الألعاب") }
             GuideCategoryCard("التواصل الاجتماعي والمراسلة", Icons.Filled.People, Modifier.weight(1f)) { onCategorySelected("التواصل الاجتماعي والمراسلة") }
             GuideCategoryCard("الترفيه والوسائط", Icons.Filled.PlayCircle, Modifier.weight(1f)) { onCategorySelected("الترفيه والوسائط") }
@@ -2378,30 +2368,38 @@ private fun HamiAppDetails(app: HamiApp, control: HamiControl?) {
         item {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween) {
                         HamiSectionTitle("المخاطر المحتملة")
                         HamiRiskCircle(app.riskCount, 24.dp)
                     }
-                    hamiRiskNames.forEach { (key, label) ->
+                    hamiRiskNames.entries.forEach { (key, label) ->
                         val risk = app.risks[key] ?: HamiRisk()
                         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(if (risk.enabled) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
-                                contentDescription = null,
-                                tint = if (risk.enabled) Color(0xFF2E7D32) else Color(0xFFC62828),
+                            Icon(Icons.Outlined.CheckCircle,
+                                contentDescription = if (risk.enabled) "ينطبق" else "لا ينطبق",
+                                tint = if (risk.enabled) Color(0xFFC62828) else Color(0xFFCCCCCC),
                                 modifier = Modifier.size(22.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(label, fontFamily = AlfontDark, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(label, fontFamily = AlfontDark, fontWeight = FontWeight.Normal, fontSize = 15.sp,
+                                    color = if (risk.enabled) Color.DarkGray else Color.Gray)
                                 if (risk.description.isNotBlank()) {
-                                    Text(risk.description, fontFamily = AlfontDark, color = Color.DarkGray,
+                                    Text(risk.description, fontFamily = AlfontDark, fontWeight = FontWeight.Normal,
+                                        color = if (risk.enabled) Color.DarkGray else Color.Gray,
                                         fontSize = 13.sp, lineHeight = 21.sp)
                                 }
                             }
                         }
                     }
-                    if (control != null) {
-                        HorizontalDivider(color = Color(0xFFE0E0E0))
+                }
+            }
+        }
+        if (control != null) {
+            item {
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         HamiSectionTitle("الرقابة الأبوية")
                         val tool = control.toolName.removePrefix("الرقابة الأبوية: ").trim()
                         Text("${tool}: ${control.toolDescription}", fontFamily = AlfontDark,
@@ -2433,5 +2431,51 @@ private fun HamiAppDetails(app: HamiApp, control: HamiControl?) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HamiSaveButton(onClick: () -> Unit, enabled: Boolean, isLoading: Boolean, modifier: Modifier = Modifier) {
+    Button(onClick = onClick, enabled = enabled,
+        modifier = modifier.width(88.dp).height(40.dp),
+        shape = RoundedCornerShape(10.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF52879C))) {
+        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+        else Text("حفظ", fontFamily = AlfontDark, fontSize = 14.sp, color = Color.White)
+    }
+}
+
+@Composable
+private fun HamiCompactField(value: String, onValueChange: (String) -> Unit, hint: String,
+                             modifier: Modifier = Modifier.fillMaxWidth(), enabled: Boolean = true, readOnly: Boolean = false) {
+    androidx.compose.foundation.text.BasicTextField(value = value, onValueChange = onValueChange,
+        enabled = enabled, readOnly = readOnly, singleLine = true,
+        textStyle = TextStyle(fontFamily = AlfontDark, fontSize = 14.sp, color = Color.DarkGray,
+            textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+            textAlign = TextAlign.Start),
+        modifier = modifier.height(44.dp).border(1.dp, Color(0xFFB0BEC5), RoundedCornerShape(10.dp)),
+        decorationBox = { inner ->
+            Box(Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                if (value.isEmpty()) Text(hint, fontFamily = AlfontDark, fontSize = 12.sp, color = Color.Gray)
+                Box(Modifier.fillMaxWidth()) { inner() }
+            }
+        })
+}
+
+@Composable
+private fun HamiBirthDateField(value: java.time.LocalDate?, onChange: (java.time.LocalDate) -> Unit, enabled: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Riyadh"))
+    Box {
+        HamiCompactField(value?.toString().orEmpty(), {}, "تاريخ الميلاد", enabled = enabled, readOnly = true)
+        Box(Modifier.matchParentSize().clickable(enabled = enabled) {
+            val initial = value ?: today.minusYears(8)
+            android.app.DatePickerDialog(context, { _, year, month, day ->
+                onChange(java.time.LocalDate.of(year, month + 1, day))
+            }, initial.year, initial.monthValue - 1, initial.dayOfMonth).apply {
+                datePicker.maxDate = today.minusYears(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.show()
+        })
     }
 }

@@ -101,7 +101,7 @@ class AuthManager {
     }
 
     // Check if user is authenticated
-    fun isParentAuthenticated(): Boolean = auth.currentUser != null
+    fun isParentAuthenticated(): Boolean = auth.currentUser?.isEmailVerified == true
 
     // Get current user
     fun getCurrentUser(): ParentUser? {
@@ -109,7 +109,7 @@ class AuthManager {
         return user?.let {
             ParentUser(
                 uid = it.uid,
-                email = it.email ?: ""
+                email = it.email ?: "", displayName = it.displayName ?: "", isEmailVerified = it.isEmailVerified
             )
         }
     }

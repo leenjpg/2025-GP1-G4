@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -31,8 +31,11 @@ class MainActivity : ComponentActivity() {
         val userRole = sharedPref.getString("USER_ROLE", null)
         val isAuthenticated = authManager.isParentAuthenticated()
 
+        if (FirebaseAuth.getInstance().currentUser?.isEmailVerified == false) {
+            startActivity(Intent(this, LoginActivity::class.java)); finish(); return
+        }
         // If user is authenticated but role is missing, fix it
-        if (isAuthenticated && userRole == null) {
+        if (isAuthenticated && userRole == null && sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)) {
             // Save the role based on what we know
             sharedPref.edit().putString("USER_ROLE", "PARENT").apply()
             startActivity(Intent(this, DashboardActivity::class.java))
@@ -46,7 +49,7 @@ class MainActivity : ComponentActivity() {
                 startActivity(Intent(this, ChildStatusActivity::class.java))
                 finish()
                 return
-            } else if (userRole == "PARENT") {
+            } else if (userRole == "PARENT" && sharedPref.getBoolean("PARENT_PROFILE_COMPLETE", false)) {
                 startActivity(Intent(this, DashboardActivity::class.java))
                 finish()
                 return
@@ -62,13 +65,13 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier
                     .fillMaxSize()
                     .background(backgroundGradient)
-                    .padding(32.dp),
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "مرحباً بك في حامي",
-                    fontSize = 32.sp,
+                    fontSize = 28.sp,
                     color = Color(0xFF52879C),
                     fontFamily = AlfontDark
                 )
@@ -79,26 +82,28 @@ class MainActivity : ComponentActivity() {
                     color = Color(0xFF788B94),
                     fontFamily = AlfontDark
                 )
-                Spacer(modifier = Modifier.height(60.dp))
+                Spacer(modifier = Modifier.height(40.dp))
 
                 Button(
                     onClick = { startActivity(Intent(this@MainActivity, LoginActivity::class.java)) },
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF52879C))
                 ) {
-                    Text("دخول كولي أمر (الأب / الأم)", fontSize = 18.sp, fontFamily = AlfontDark)
+                    Text("دخول كولي أمر", fontSize = 18.sp, fontFamily = AlfontDark)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = { startActivity(Intent(this@MainActivity, ChildLoginActivity::class.java)) },
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
-                    shape = RectangleShape,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF788B94))
                 ) {
-                    Text("إعداد هذا الجهاز للطفل", fontSize = 18.sp, fontFamily = AlfontDark)
+                    Text("إعداد الجهاز للطفل", fontSize = 18.sp, fontFamily = AlfontDark)
                 }
             }
         }

@@ -6,11 +6,14 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
@@ -20,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
@@ -175,29 +178,19 @@ fun ChildLoginScreen(
     var newChildName by remember { mutableStateOf("") }
     var newChildAge by remember { mutableStateOf("") }
 
-    val backgroundGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF))
-    )
     val hamiTeal = Color(0xFF52879C)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient)
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
+    HamiAuthLayout {
+        HamiAuthHeader()
         if (!isAuthenticated) {
             // Step 1: Parent Login
-            Text("إعداد جهاز الطفل", color = hamiTeal, fontSize = 32.sp, fontFamily = AlfontDark)
-            Text("الرجاء تسجيل الدخول بحساب الوالدين", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark)
-            Spacer(modifier = Modifier.height(32.dp))
+            HamiAuthTitle("إعداد جهاز الطفل", bottomPadding = 8.dp)
+            Text("الرجاء تسجيل الدخول بحساب ولي الأمر", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), textAlign = TextAlign.Start)
 
-            OutlinedTextField(
+            HamiAuthTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("البريد الإلكتروني للوالد", fontFamily = AlfontDark) },
+                label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -212,7 +205,7 @@ fun ChildLoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
+            HamiAuthTextField(
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("كلمة المرور", fontFamily = AlfontDark) },
@@ -235,14 +228,18 @@ fun ChildLoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
+            HamiAuthButton(label = "تسجيل الدخول", isLoading = isLoading,
                 onClick = {
                     isLoading = true
                     errorMessage = null
                     authManager.loginParent(email, password) { success, error ->
                         if (success) {
                             val currentUser = authManager.getCurrentUser()
-                            if (currentUser != null) {
+                            if (currentUser != null && !currentUser.isEmailVerified) {
+                                authManager.logoutParent()
+                                errorMessage = "يرجى تأكيد البريد الإلكتروني من حساب ولي الأمر أولاً"
+                                isLoading = false
+                            } else if (currentUser != null) {
                                 val db = FirebaseFirestore.getInstance()
                                 db.collection("child")
                                     .whereEqualTo("parentId", currentUser.uid)
@@ -276,24 +273,14 @@ fun ChildLoginScreen(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
                 enabled = !isLoading
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("تسجيل الدخول", color = Color.White, fontSize = 20.sp, fontFamily = AlfontDark)
-                }
-            }
+            )
         } else if (showCreateChildForm) {
             // Step 2b: Create New Child Form
-            Text("إضافة طفل جديد", color = hamiTeal, fontSize = 32.sp, fontFamily = AlfontDark)
-            Text("أدخل معلومات الطفل الجديد", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark)
-            Spacer(modifier = Modifier.height(32.dp))
+            HamiAuthTitle("إضافة طفل جديد", bottomPadding = 8.dp)
+            Text("أدخل معلومات الطفل الجديد", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), textAlign = TextAlign.Start)
 
-            OutlinedTextField(
+            HamiAuthTextField(
                 value = newChildName,
                 onValueChange = { newChildName = it },
                 label = { Text("اسم الطفل", fontFamily = AlfontDark) },
@@ -306,14 +293,17 @@ fun ChildLoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
+            HamiAuthTextField(
                 value = newChildAge,
                 onValueChange = { newChildAge = it },
                 label = { Text("عمر الطفل", fontFamily = AlfontDark) },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
+                textStyle = LocalTextStyle.current.copy(
+                    textDirection = TextDirection.Content
+                )
             )
 
             errorMessage?.let {
@@ -333,7 +323,8 @@ fun ChildLoginScreen(
                         newChildAge = ""
                     },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RectangleShape,
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                 ) {
                     Text("إلغاء", color = Color.White, fontSize = 16.sp, fontFamily = AlfontDark)
@@ -358,7 +349,8 @@ fun ChildLoginScreen(
                         }
                     },
                     modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RectangleShape,
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = hamiTeal)
                 ) {
                     Text("إضافة", color = Color.White, fontSize = 16.sp, fontFamily = AlfontDark)
@@ -373,24 +365,24 @@ fun ChildLoginScreen(
 
         } else {
             // Step 2a: Select Child or Create New
-            Text("اختر الطفل", color = hamiTeal, fontSize = 32.sp, fontFamily = AlfontDark)
-            Text("اختر اسم الطفل لهذا الجهاز", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark)
-            Spacer(modifier = Modifier.height(32.dp))
+            HamiAuthTitle("اختر الطفل", bottomPadding = 8.dp)
+            Text("اختر اسم الطفل لهذا الجهاز", fontSize = 14.sp, color = Color.Gray, fontFamily = AlfontDark, modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp), textAlign = TextAlign.Start)
 
             // Show existing children (if any)
             if (childrenList.isNotEmpty()) {
                 childrenList.forEach { child ->
-                    Card(
+                    OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp)
                             .clickable {
                                 selectedChild = child
                             },
-                        shape = RectangleShape,
+                        shape = RoundedCornerShape(16.dp),
+                        border = if (selectedChild?.childId == child.childId) androidx.compose.foundation.BorderStroke(1.dp, hamiTeal) else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFB9CBD3)),
                         colors = CardDefaults.cardColors(
                             containerColor = if (selectedChild?.childId == child.childId)
-                                hamiTeal.copy(alpha = 0.2f)
+                                Color(0xFFF5FAFC)
                             else
                                 Color.White
                         ),
@@ -418,20 +410,25 @@ fun ChildLoginScreen(
                                 )
                             }
                             if (selectedChild?.childId == child.childId) {
-                                Text("✅", fontSize = 24.sp)
+                                Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = hamiTeal, modifier = Modifier.size(24.dp))
                             }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             } else{
-                Text(
-                    "لم تتم إضافة أي أطفال بعد، قم بإضافة الأطفال من تطبيق ولي الأمر أولًا",
-                    fontSize = 14.sp,
-                    color = Color.Gray,
-                    fontFamily = AlfontDark,
-                    textAlign = TextAlign.Center
-                )
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+                    Text(
+                        "لم تتم إضافة أي أطفال بعد، قم بإضافة الأطفال من تطبيق ولي الأمر أولًا",
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        fontFamily = AlfontDark,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    )
+                }
             }
 
 
@@ -441,46 +438,29 @@ fun ChildLoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-           if (childrenList.isNotEmpty()) {
-               Button(
-                   onClick = {
-                       if (selectedChild == null && childrenList.isNotEmpty()) {
-                           errorMessage = "الرجاء اختيار طفل"
-                           return@Button
-                       }
-                       if (selectedChild != null) {
-                           isLoading = true
-                           val parentUser = authManager.getCurrentUser()
-                           if (parentUser != null && selectedChild != null) {
-                               onLoginSuccess(parentUser, selectedChild!!)
-                           } else {
-                               errorMessage = "حدث خطأ"
-                               isLoading = false
-                           }
-                       } else if (childrenList.isEmpty()) {
-                           errorMessage = "الرجاء إضافة طفل أولاً"
-                       }
-                   },
-                   modifier = Modifier.fillMaxWidth().height(64.dp),
-                   shape = RectangleShape,
-                   colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
-                   enabled = !isLoading && selectedChild != null
-               ) {
-                   if (isLoading) {
-                       CircularProgressIndicator(
-                           color = Color.White,
-                           modifier = Modifier.size(24.dp)
-                       )
-                   } else {
-                       Text(
-                           "تأكيد وربط الجهاز",
-                           color = Color.White,
-                           fontSize = 18.sp,
-                           fontFamily = AlfontDark
-                       )
-                   }
-               }
-           }
+            if (childrenList.isNotEmpty()) {
+                HamiAuthButton(label = "تأكيد وربط الجهاز", isLoading = isLoading,
+                    onClick = {
+                        if (selectedChild == null && childrenList.isNotEmpty()) {
+                            errorMessage = "الرجاء اختيار طفل"
+                            return@HamiAuthButton
+                        }
+                        if (selectedChild != null) {
+                            isLoading = true
+                            val parentUser = authManager.getCurrentUser()
+                            if (parentUser != null && selectedChild != null) {
+                                onLoginSuccess(parentUser, selectedChild!!)
+                            } else {
+                                errorMessage = "حدث خطأ"
+                                isLoading = false
+                            }
+                        } else if (childrenList.isEmpty()) {
+                            errorMessage = "الرجاء إضافة طفل أولاً"
+                        }
+                    },
+                    enabled = !isLoading && selectedChild != null
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 

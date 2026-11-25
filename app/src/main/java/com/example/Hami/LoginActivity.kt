@@ -5,15 +5,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.Font
@@ -30,9 +34,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.runBlocking
@@ -65,8 +71,14 @@ class LoginActivity : ComponentActivity() {
                     MainLoginScreen(
                         onLoginSuccess = { parentUser ->
                             // For existing users, just navigate
-                            markProfileComplete(parentUser.uid, parentUser.email, "")
-                            navigateToDashboard()
+                            FirebaseFirestore.getInstance().collection("parent").document(parentUser.uid).get()
+                                .addOnSuccessListener { doc ->
+                                    if (doc.exists()) {
+                                        markProfileComplete(parentUser.uid, parentUser.email, doc.getString("displayName") ?: "")
+                                        navigateToDashboard()
+                                    } else saveParentToFirestore(parentUser, parentUser.displayName)
+                                }
+                                .addOnFailureListener { android.widget.Toast.makeText(this@LoginActivity, "تعذر جلب بيانات الحساب", android.widget.Toast.LENGTH_LONG).show() }
                         },
                         onSignUpSuccess = { parentUser, fullName ->
                             // Save to Firestore FIRST, then navigate
@@ -135,60 +147,52 @@ fun MainLoginScreen(
     onSignUpSuccess: (ParentUser, String) -> Unit,
     authManager: AuthManager
 ) {
-    var currentScreen by remember { mutableStateOf(LoginScreenType.LOGIN) }
-    val hamiTeal = Color(0xFF52879C)
-    val backgroundGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFFFFFFFF), Color(0xFFC0D4DF))
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient)
-            .padding(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "حامي",
-                color = hamiTeal,
-                fontSize = 56.sp,
-                fontFamily = AlfontDark,
-                modifier = Modifier.padding(top = 32.dp)
+    var currentScreen by remember { mutableStateOf(if (FirebaseAuth.getInstance().currentUser?.isEmailVerified == false) LoginScreenType.VERIFY else LoginScreenType.LOGIN) }
+    val context = LocalContext.current
+    var pendingName by remember { mutableStateOf("") }
+    var sendInitially by remember { mutableStateOf(false) }
+    HamiAuthLayout {
+        HamiAuthHeader()
+        when (currentScreen) {
+            LoginScreenType.LOGIN -> {
+                LoginScreenContent(
+                    onNavigateToSignUp = { currentScreen = LoginScreenType.SIGNUP },
+                    onNavigateToForgotPassword = { currentScreen = LoginScreenType.FORGOT_PASSWORD },
+                    onLoginSuccess = { user ->
+                        if (user.isEmailVerified) onLoginSuccess(user)
+                        else { sendInitially = true; currentScreen = LoginScreenType.VERIFY }
+                    },
+                    authManager = authManager
+                )
+            }
+            LoginScreenType.SIGNUP -> {
+                SignUpScreenContent(
+                    onNavigateBack = { currentScreen = LoginScreenType.LOGIN },
+                    onSignUpSuccess = { _, name ->
+                        pendingName = name
+                        sendInitially = true
+                        currentScreen = LoginScreenType.VERIFY
+                    },
+                    authManager = authManager
+                )
+            }
+            LoginScreenType.VERIFY -> EmailVerificationScreen(
+                pendingName = pendingName, sendInitially = sendInitially,
+                onBack = { authManager.logoutParent(); currentScreen = LoginScreenType.LOGIN },
+                onVerified = { user ->
+                    val name = user.displayName.ifBlank { pendingName }
+                    FirebaseFirestore.getInstance().collection("parent").document(user.uid).get()
+                        .addOnSuccessListener { doc ->
+                            if (doc.exists()) onLoginSuccess(user) else onSignUpSuccess(user, name)
+                        }
+                        .addOnFailureListener { android.widget.Toast.makeText(context, "تعذر جلب بيانات الحساب، حاول مرة أخرى", android.widget.Toast.LENGTH_LONG).show() }
+                }
             )
-
-            Text(
-                text = "لحماية أطفالك عبر الإنترنت",
-                color = Color(0xFF788B94),
-                fontSize = 16.sp,
-                fontFamily = AlfontDark,
-                modifier = Modifier.padding(bottom = 48.dp)
-            )
-
-            when (currentScreen) {
-                LoginScreenType.LOGIN -> {
-                    LoginScreenContent(
-                        onNavigateToSignUp = { currentScreen = LoginScreenType.SIGNUP },
-                        onNavigateToForgotPassword = { currentScreen = LoginScreenType.FORGOT_PASSWORD },
-                        onLoginSuccess = onLoginSuccess,
-                        authManager = authManager
-                    )
-                }
-                LoginScreenType.SIGNUP -> {
-                    SignUpScreenContent(
-                        onNavigateBack = { currentScreen = LoginScreenType.LOGIN },
-                        onSignUpSuccess = onSignUpSuccess,
-                        authManager = authManager
-                    )
-                }
-                LoginScreenType.FORGOT_PASSWORD -> {
-                    ForgotPasswordScreenContent(
-                        onNavigateBack = { currentScreen = LoginScreenType.LOGIN },
-                        authManager = authManager
-                    )
-                }
+            LoginScreenType.FORGOT_PASSWORD -> {
+                ForgotPasswordScreenContent(
+                    onNavigateBack = { currentScreen = LoginScreenType.LOGIN },
+                    authManager = authManager
+                )
             }
         }
     }
@@ -209,15 +213,9 @@ fun LoginScreenContent(
     val hamiTeal = Color(0xFF52879C)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "تسجيل الدخول",
-            fontSize = 24.sp,
-            fontFamily = AlfontDark,
-            color = hamiTeal,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        HamiAuthTitle("تسجيل الدخول", bottomPadding = 24.dp)
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
@@ -235,7 +233,7 @@ fun LoginScreenContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("كلمة المرور", fontFamily = AlfontDark) },
@@ -267,7 +265,9 @@ fun LoginScreenContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
+        HamiAuthButton(
+            label = "تسجيل الدخول",
+            isLoading = isLoading,
             onClick = {
                 coroutineScope.launch {
                     isLoading = true
@@ -289,14 +289,8 @@ fun LoginScreenContent(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
-            shape = RectangleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
             enabled = !isLoading
-        ) {
-            if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-            else Text("دخول", color = Color.White, fontSize = 20.sp, fontFamily = AlfontDark)
-        }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -321,6 +315,7 @@ fun SignUpScreenContent(
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passwordFocused by remember { mutableStateOf(false) }
     var confirmPassword by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -328,19 +323,9 @@ fun SignUpScreenContent(
     val hamiTeal = Color(0xFF52879C)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        IconButton(onClick = onNavigateBack, modifier = Modifier.padding(bottom = 16.dp)) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = hamiTeal)
-        }
+        HamiAuthTitle("إنشاء حساب جديد", bottomPadding = 24.dp, onBack = onNavigateBack)
 
-        Text(
-            text = "إنشاء حساب جديد",
-            fontSize = 24.sp,
-            fontFamily = AlfontDark,
-            color = hamiTeal,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        OutlinedTextField(
+        HamiAuthTextField(
             value = fullName,
             onValueChange = { fullName = it },
             label = { Text("الاسم الكامل", fontFamily = AlfontDark) },
@@ -354,7 +339,7 @@ fun SignUpScreenContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
@@ -372,13 +357,13 @@ fun SignUpScreenContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = password,
             onValueChange = { password = it },
             label = { Text("كلمة المرور", fontFamily = AlfontDark) },
             leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().onFocusChanged { passwordFocused = it.isFocused },
             enabled = !isLoading,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             singleLine = true,
@@ -389,9 +374,19 @@ fun SignUpScreenContent(
             )
         )
 
+        if (passwordFocused) {
+            Text(
+                text = "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
+                fontSize = 12.sp,
+                fontFamily = AlfontDark,
+                color = if (password.length >= 6) Color(0xFF4CAF50) else Color.Gray,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
             label = { Text("تأكيد كلمة المرور", fontFamily = AlfontDark) },
@@ -409,13 +404,6 @@ fun SignUpScreenContent(
             )
         )
 
-        Text(
-            text = "كلمة المرور يجب أن تكون 6 أحرف على الأقل",
-            fontSize = 12.sp,
-            fontFamily = AlfontDark,
-            color = if (password.length >= 6) Color(0xFF4CAF50) else Color.Gray,
-            modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-        )
 
         errorMessage?.let {
             Text(text = it, color = Color.Red, modifier = Modifier.padding(top = 8.dp), fontSize = 14.sp, fontFamily = AlfontDark)
@@ -423,7 +411,9 @@ fun SignUpScreenContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
+        HamiAuthButton(
+            label = "إنشاء حساب",
+            isLoading = isLoading,
             onClick = {
                 when {
                     fullName.isBlank() -> errorMessage = "الاسم الكامل مطلوب"
@@ -455,14 +445,8 @@ fun SignUpScreenContent(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
-            shape = RectangleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
             enabled = !isLoading && fullName.isNotBlank() && email.isNotBlank() && password.length >= 6 && password == confirmPassword
-        ) {
-            if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-            else Text("إنشاء حساب", color = Color.White, fontSize = 20.sp, fontFamily = AlfontDark)
-        }
+        )
     }
 }
 
@@ -479,27 +463,18 @@ fun ForgotPasswordScreenContent(
     val hamiTeal = Color(0xFF52879C)
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        IconButton(onClick = onNavigateBack, modifier = Modifier.padding(bottom = 16.dp)) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = hamiTeal)
-        }
-
-        Text(
-            text = "استعادة كلمة المرور",
-            fontSize = 24.sp,
-            fontFamily = AlfontDark,
-            color = hamiTeal,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        HamiAuthTitle("استعادة كلمة المرور", bottomPadding = 8.dp, onBack = onNavigateBack)
 
         Text(
             text = "سنرسل لك رابطاً لإعادة تعيين كلمة المرور على بريدك الإلكتروني",
             fontSize = 14.sp,
             fontFamily = AlfontDark,
             color = Color.Gray,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            textAlign = TextAlign.Start
         )
 
-        OutlinedTextField(
+        HamiAuthTextField(
             value = email,
             onValueChange = { email = it },
             label = { Text("البريد الإلكتروني", fontFamily = AlfontDark) },
@@ -525,7 +500,9 @@ fun ForgotPasswordScreenContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
+        HamiAuthButton(
+            label = "إرسال رابط إعادة التعيين",
+            isLoading = isLoading,
             onClick = {
                 coroutineScope.launch {
                     isLoading = true
@@ -543,15 +520,147 @@ fun ForgotPasswordScreenContent(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
-            shape = RectangleShape,
-            colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
             enabled = !isLoading && email.isNotBlank()
-        ) {
-            if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-            else Text("إرسال رابط إعادة التعيين", color = Color.White, fontSize = 20.sp, fontFamily = AlfontDark)
+        )
+    }
+}
+
+enum class LoginScreenType { LOGIN, SIGNUP, FORGOT_PASSWORD, VERIFY }
+
+private val authTeal = Color(0xFF52879C)
+
+@Composable
+internal fun HamiAuthLayout(content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.fillMaxSize().background(Brush.linearGradient(
+        colors = listOf(Color.White, Color(0xFFC0D4DF))
+    )).padding(24.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = content
+        )
+    }
+}
+
+@Composable
+internal fun HamiAuthHeader() {
+    Text("حامي", color = authTeal, fontSize = 56.sp, fontFamily = AlfontDark,
+        modifier = Modifier.padding(top = 32.dp))
+    Spacer(modifier = Modifier.height(10.dp))
+    Text("لحماية أطفالك عبر الإنترنت", color = Color(0xFF788B94), fontSize = 16.sp,
+        fontFamily = AlfontDark, modifier = Modifier.padding(bottom = 32.dp))
+}
+
+@Composable
+internal fun HamiAuthTitle(
+    text: String,
+    bottomPadding: androidx.compose.ui.unit.Dp = 24.dp,
+    onBack: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = bottomPadding).heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text, fontSize = 24.sp, fontFamily = AlfontDark, color = authTeal,
+            modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
+        if (onBack != null) {
+            HamiAuthBackButton(onClick = onBack)
         }
     }
 }
 
-enum class LoginScreenType { LOGIN, SIGNUP, FORGOT_PASSWORD }
+@Composable
+internal fun HamiAuthBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier.size(48.dp)) {
+        Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = "Back", tint = authTeal)
+    }
+}
+
+@Composable
+internal fun HamiAuthTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: @Composable () -> Unit,
+    leadingIcon: @Composable () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    enabled: Boolean = true,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+    isError: Boolean = false,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
+    textStyle: androidx.compose.ui.text.TextStyle = LocalTextStyle.current
+) {
+    OutlinedTextField(
+        value = value, onValueChange = onValueChange, label = label, leadingIcon = leadingIcon,
+        modifier = modifier, enabled = enabled, keyboardOptions = keyboardOptions,
+        singleLine = singleLine, isError = isError, visualTransformation = visualTransformation,
+        textStyle = textStyle, shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = authTeal, unfocusedBorderColor = Color(0xFFB9CBD3),
+            focusedContainerColor = Color.White, unfocusedContainerColor = Color.White,
+            focusedLabelColor = authTeal, focusedLeadingIconColor = authTeal,
+            unfocusedLeadingIconColor = authTeal
+        )
+    )
+}
+
+@Composable
+internal fun HamiAuthButton(label: String, isLoading: Boolean, onClick: () -> Unit, enabled: Boolean) {
+    Button(onClick = onClick, enabled = enabled,
+        modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = authTeal)) {
+        if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+        else Text(label, color = Color.White, fontSize = 20.sp, fontFamily = AlfontDark)
+    }
+}
+
+@Composable
+private fun EmailVerificationScreen(pendingName: String, sendInitially: Boolean, onBack: () -> Unit, onVerified: (ParentUser) -> Unit) {
+    val auth = FirebaseAuth.getInstance()
+    val scope = rememberCoroutineScope()
+    var remaining by remember { mutableStateOf(0) }
+    var busy by remember { mutableStateOf(false) }
+    var sent by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    suspend fun send() {
+        busy = true
+        message = null
+        try {
+            val user = auth.currentUser ?: error("No user")
+            if (pendingName.isNotBlank()) user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(pendingName).build()).await()
+            auth.setLanguageCode("ar")
+            user.sendEmailVerification().await()
+            sent = true
+            remaining = 60
+        } catch (e: Exception) { message = "تعذر إرسال رابط التحقق، حاول مرة أخرى" }
+        finally { busy = false }
+    }
+    LaunchedEffect(Unit) { if (sendInitially) send() }
+    LaunchedEffect(remaining) { if (remaining > 0) { delay(1000); remaining-- } }
+    HamiAuthTitle("تأكيد البريد الإلكتروني", onBack = onBack)
+    Icon(Icons.Default.Email, contentDescription = null, tint = authTeal, modifier = Modifier.size(48.dp))
+    Spacer(Modifier.height(16.dp))
+    Text(if (sent) "تم إرسال رابط التحقق إلى بريدك الإلكتروني." else "يرجى تأكيد بريدك الإلكتروني قبل المتابعة.", fontFamily = AlfontDark, textAlign = TextAlign.Center)
+    Text(auth.currentUser?.email.orEmpty(), color = authTeal, fontFamily = AlfontDark)
+    Spacer(Modifier.height(12.dp))
+    Text("يرجى فتح الرابط لتأكيد بريدك الإلكتروني قبل المتابعة.", color = Color.Gray, fontFamily = AlfontDark, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(24.dp))
+    HamiAuthButton("تم التحقق", busy, onClick = { scope.launch {
+        busy = true; message = null
+        try {
+            val user = auth.currentUser ?: error("No user")
+            user.reload().await()
+            val fresh = auth.currentUser ?: error("No user")
+            if (fresh.isEmailVerified) {
+                fresh.getIdToken(true).await()
+                onVerified(ParentUser(fresh.uid, fresh.email.orEmpty(), fresh.displayName.orEmpty(), true))
+            } else message = "لم يتم تأكيد البريد الإلكتروني بعد"
+        } catch (e: Exception) { message = "تعذر التحقق، حاول مرة أخرى" }
+        finally { busy = false }
+    } }, enabled = !busy)
+    TextButton(onClick = { scope.launch { send() } }, enabled = !busy && remaining == 0) {
+        Text(if (remaining > 0) "إعادة إرسال رابط التحقق ($remaining)" else "إعادة إرسال رابط التحقق", fontFamily = AlfontDark, color = authTeal)
+    }
+    message?.let { Text(it, color = Color.Red, fontFamily = AlfontDark) }
+}
