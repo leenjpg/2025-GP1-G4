@@ -36,12 +36,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.runBlocking
 
 private val AlfontDark = FontFamily(Font(R.font.alfont_com_dark, FontWeight.Normal))
 
@@ -147,7 +143,7 @@ fun MainLoginScreen(
     onSignUpSuccess: (ParentUser, String) -> Unit,
     authManager: AuthManager
 ) {
-    var currentScreen by remember { mutableStateOf(if (FirebaseAuth.getInstance().currentUser?.isEmailVerified == false) LoginScreenType.VERIFY else LoginScreenType.LOGIN) }
+    var currentScreen by remember { mutableStateOf(if (authManager.getCurrentUser()?.isEmailVerified == false) LoginScreenType.VERIFY else LoginScreenType.LOGIN) }
     val context = LocalContext.current
     var pendingName by remember { mutableStateOf("") }
     var sendInitially by remember { mutableStateOf(false) }
@@ -177,7 +173,7 @@ fun MainLoginScreen(
                 )
             }
             LoginScreenType.VERIFY -> EmailVerificationScreen(
-                pendingName = pendingName, sendInitially = sendInitially,
+                pendingName = pendingName, sendInitially = sendInitially, authManager = authManager,
                 onBack = { authManager.logoutParent(); currentScreen = LoginScreenType.LOGIN },
                 onVerified = { user ->
                     val name = user.displayName.ifBlank { pendingName }
@@ -616,8 +612,7 @@ internal fun HamiAuthButton(label: String, isLoading: Boolean, onClick: () -> Un
 }
 
 @Composable
-private fun EmailVerificationScreen(pendingName: String, sendInitially: Boolean, onBack: () -> Unit, onVerified: (ParentUser) -> Unit) {
-    val auth = FirebaseAuth.getInstance()
+private fun EmailVerificationScreen(pendingName: String, sendInitially: Boolean, authManager: AuthManager, onBack: () -> Unit, onVerified: (ParentUser) -> Unit) {
     val scope = rememberCoroutineScope()
     var remaining by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
@@ -627,10 +622,7 @@ private fun EmailVerificationScreen(pendingName: String, sendInitially: Boolean,
         busy = true
         message = null
         try {
-            val user = auth.currentUser ?: error("No user")
-            if (pendingName.isNotBlank()) user.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(pendingName).build()).await()
-            auth.setLanguageCode("ar")
-            user.sendEmailVerification().await()
+            authManager.sendEmailVerification(pendingName)
             sent = true
             remaining = 60
         } catch (e: Exception) { message = "تعذر إرسال رابط التحقق، حاول مرة أخرى" }
@@ -642,19 +634,16 @@ private fun EmailVerificationScreen(pendingName: String, sendInitially: Boolean,
     Icon(Icons.Default.Email, contentDescription = null, tint = authTeal, modifier = Modifier.size(48.dp))
     Spacer(Modifier.height(16.dp))
     Text(if (sent) "تم إرسال رابط التحقق إلى بريدك الإلكتروني." else "يرجى تأكيد بريدك الإلكتروني قبل المتابعة.", fontFamily = AlfontDark, textAlign = TextAlign.Center)
-    Text(auth.currentUser?.email.orEmpty(), color = authTeal, fontFamily = AlfontDark)
+    Text(authManager.getCurrentUser()?.email.orEmpty(), color = authTeal, fontFamily = AlfontDark)
     Spacer(Modifier.height(12.dp))
     Text("يرجى فتح الرابط لتأكيد بريدك الإلكتروني قبل المتابعة.", color = Color.Gray, fontFamily = AlfontDark, textAlign = TextAlign.Center)
     Spacer(Modifier.height(24.dp))
     HamiAuthButton("تم التحقق", busy, onClick = { scope.launch {
         busy = true; message = null
         try {
-            val user = auth.currentUser ?: error("No user")
-            user.reload().await()
-            val fresh = auth.currentUser ?: error("No user")
-            if (fresh.isEmailVerified) {
-                fresh.getIdToken(true).await()
-                onVerified(ParentUser(fresh.uid, fresh.email.orEmpty(), fresh.displayName.orEmpty(), true))
+            val verifiedUser = authManager.verifyEmail()
+            if (verifiedUser != null) {
+                onVerified(verifiedUser)
             } else message = "لم يتم تأكيد البريد الإلكتروني بعد"
         } catch (e: Exception) { message = "تعذر التحقق، حاول مرة أخرى" }
         finally { busy = false }

@@ -1,5 +1,7 @@
 package com.example.Hami
 
+import com.google.firebase.auth.UserProfileChangeRequest
+import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.Firebase
@@ -93,6 +95,28 @@ class AuthManager {
             .addOnFailureListener { exception ->
                 onResult(false, exception.message ?: "فشل الاتصال بالخادم")
             }
+    }
+
+    // Send email verification link
+    suspend fun sendEmailVerification(pendingName: String = "") {
+        val user = auth.currentUser ?: error("No user")
+        if (pendingName.isNotBlank()) {
+            user.updateProfile(
+                UserProfileChangeRequest.Builder().setDisplayName(pendingName).build()
+            ).await()
+        }
+        auth.setLanguageCode("ar")
+        user.sendEmailVerification().await()
+    }
+
+    // Check email verification and refresh authentication token
+    suspend fun verifyEmail(): ParentUser? {
+        val user = auth.currentUser ?: error("No user")
+        user.reload().await()
+        val fresh = auth.currentUser ?: error("No user")
+        if (!fresh.isEmailVerified) return null
+        fresh.getIdToken(true).await()
+        return ParentUser(fresh.uid, fresh.email.orEmpty(), fresh.displayName.orEmpty(), true)
     }
 
     // Logout function

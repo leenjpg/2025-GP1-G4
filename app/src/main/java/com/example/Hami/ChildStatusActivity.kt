@@ -14,9 +14,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -194,9 +206,9 @@ fun ChildSetupScreen(isServiceEnabled: Boolean, onEnableClick: () -> Unit, onLog
                         AuthManager().loginParent(parentEmail, logoutPassword){success, error ->
                             isCheckingPassword = false
                             if(success){ //for the firebase enabled update after logout for correct deletion of children
-                               val childId = context
-                                   .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
-                                   .getString("CHILD_ID", "") ?: ""
+                                val childId = context
+                                    .getSharedPreferences("HamiPrefs", android.content.Context.MODE_PRIVATE)
+                                    .getString("CHILD_ID", "") ?: ""
                                 if (childId.isNotEmpty()){
                                     isCheckingPassword = true
                                     FirebaseFirestore.getInstance().collection("child").document(childId)
@@ -233,96 +245,74 @@ fun ChildSetupScreen(isServiceEnabled: Boolean, onEnableClick: () -> Unit, onLog
             containerColor = Color.White
         )
     }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundGradient)
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Logout button at top right
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+    val statusColor = if (isServiceEnabled) Color(0xFF388E3C) else hamiTeal
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(backgroundGradient)
+                .verticalScroll(rememberScrollState()).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Button(
-                onClick = {
-                    logoutPassword = ""
-                    logoutError = null
-                    showLogoutDialog = true
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
-                shape = RectangleShape
-            ) {
-                Text("خروج", fontSize = 14.sp, fontFamily = AlfontDark, color = Color.White)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                Button(
+                    onClick = {
+                        logoutPassword = ""
+                        logoutError = null
+                        showLogoutDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.height(40.dp)
+                        .shadow(elevation = 3.dp, shape = RoundedCornerShape(16.dp)),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                ) {
+                    Text("تسجيل الخروج", fontFamily = AlfontDark, color = Color.White, fontSize = 14.sp)
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = "حامي",
-            fontSize = 64.sp,
-            color = hamiTeal,
-            fontFamily = AlfontDark
-        )
-
-        Text(
-            text = "حماية ذكية، خصوصية تامة",
-            fontSize = 18.sp,
-            color = Color(0xFF788B94),
-            fontFamily = AlfontDark,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(60.dp))
-
-        Text(
-            text = if (isServiceEnabled) "✅" else "🛡️",
-            fontSize = 100.sp
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (isServiceEnabled) {
-            Text(
-                text = "الحماية مفعلة",
-                fontSize = 24.sp,
-                fontFamily = AlfontDark,
-                color = Color(0xFF4CAF50)
-            )
-            Text(
-                text = "جهاز الطفل محمي الآن",
-                fontSize = 14.sp,
-                fontFamily = AlfontDark,
-                color = Color.Gray
-            )
-        } else {
-            Text(
-                text = "الحماية غير مفعلة",
-                fontSize = 24.sp,
-                fontFamily = AlfontDark,
-                color = hamiTeal
-            )
-            Text(
-                text = "اضغط على الزر أدناه لتفعيل الحماية",
-                fontSize = 14.sp,
-                fontFamily = AlfontDark,
-                color = Color.Gray
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(
-                onClick = onEnableClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
-                shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = hamiTeal),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+            Spacer(Modifier.height(20.dp))
+            Text("حامي", fontSize = 64.sp, color = hamiTeal, fontFamily = AlfontDark)
+            Spacer(Modifier.height(10.dp))
+            Text("حماية ذكية، خصوصية تامة", fontSize = 18.sp, color = Color(0xFF788B94), fontFamily = AlfontDark)
+            Spacer(Modifier.height(40.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
             ) {
-                Text("تفعيل الحماية", fontSize = 20.sp, fontFamily = AlfontDark, color = Color.White)
+                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(96.dp).background(statusColor.copy(alpha = 0.10f), CircleShape), contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.size(54.dp)) {
+                            val w = size.width
+                            val h = size.height
+                            val shield = Path().apply {
+                                moveTo(w * .5f, h * .06f)
+                                lineTo(w * .88f, h * .22f)
+                                lineTo(w * .84f, h * .58f)
+                                quadraticBezierTo(w * .78f, h * .82f, w * .5f, h * .95f)
+                                quadraticBezierTo(w * .22f, h * .82f, w * .16f, h * .58f)
+                                lineTo(w * .12f, h * .22f)
+                                close()
+                            }
+                            drawPath(shield, statusColor, style = Stroke(width = 3.dp.toPx()))
+                            if (isServiceEnabled) {
+                                drawLine(statusColor, Offset(w*.30f,h*.49f), Offset(w*.44f,h*.63f), 3.dp.toPx(), StrokeCap.Round)
+                                drawLine(statusColor, Offset(w*.44f,h*.63f), Offset(w*.70f,h*.36f), 3.dp.toPx(), StrokeCap.Round)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Text(if (isServiceEnabled) "الحماية مفعلة" else "الحماية غير مفعلة", fontSize = 24.sp, fontFamily = AlfontDark, color = statusColor)
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (isServiceEnabled) "جهاز الطفل محمي الآن" else "اضغط على الزر أدناه لتفعيل الحماية", fontSize = 14.sp, fontFamily = AlfontDark, color = Color.Gray, textAlign = TextAlign.Center)
+                    if (!isServiceEnabled) {
+                        Spacer(Modifier.height(24.dp))
+                        Button(onClick = onEnableClick, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = hamiTeal), elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)) {
+                            Text("تفعيل الحماية", fontSize = 18.sp, fontFamily = AlfontDark, color = Color.White)
+                        }
+                    }
+                }
             }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
