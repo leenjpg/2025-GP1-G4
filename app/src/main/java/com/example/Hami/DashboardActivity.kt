@@ -1804,8 +1804,8 @@ fun ManageChildrenSection(parentId: String, hamiTeal: Color){
                             }
                             val selectedDate = birthDate
                             val age = selectedDate?.let { java.time.Period.between(it, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Riyadh"))).years }
-                            if (age == null || age < 1 || age > 18) {
-                                errorMessage = "يجب أن يكون عمر الطفل بين 1 و 18"
+                            if (age == null || age < 6 || age > 12) {
+                                errorMessage = "يجب أن يكون عمر الطفل بين 6 و 12"
                                 return@HamiSaveButton
                             }
                             isAdding = true
